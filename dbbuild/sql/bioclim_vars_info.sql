@@ -1,0 +1,2 @@
+INSERT INTO fuentes_bioclimaticas(fuente, bins, area, descripcion, available_grids, filter_fields) VALUES('{source}', '{bins}', '{area}', '{description}', {available_grids},'{filter_fields}')
+RETURNING id

@@ -1,0 +1,1 @@
+UPDATE raster_bins SET label = '{label}', id_fuentes_bio = {type} WHERE layer = '{layer}' and id_fuentes_bio is NULL;

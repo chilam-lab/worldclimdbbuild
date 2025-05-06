@@ -1,0 +1,19 @@
+wc2.1_10m_bio_1.tif,Annual Mean Temperature,worldclim historical,worldclim 10min
+wc2.1_10m_bio_2.tif,Mean Diurnal Range (Mean of monthly (max temp - min temp)),worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_3.tif,Isothermality (BIO2/BIO7) (×100),worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_4.tif,Temperature Seasonality (standard deviation ×100),worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_5.tif,Max Temperature of Warmest Month,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_6.tif,Min Temperature of Coldest Month,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_7.tif,Temperature Annual Range (BIO5-BIO6),worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_8.tif,Mean Temperature of Wettest Quarter,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_9.tif,Mean Temperature of Driest Quarter,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_10.tif,Mean Temperature of Warmest Quarter,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_11.tif,Mean Temperature of Coldest Quarter,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_12.tif,Annual Precipitation,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_13.tif,Precipitation of Wettest Month,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_14.tif,Precipitation of Driest Month,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_15.tif,Precipitation Seasonality (Coefficient of Variation),worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_16.tif,Precipitation of Wettest Quarter,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_17.tif,Precipitation of Driest Quarter,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_18.tif,Precipitation of Warmest Quarter,worldclim Historical climate data,worldclim 10min
+wc2.1_10m_bio_19.tif,Precipitation of Coldest Quarter,worldclim Historical climate data,worldclim 10min

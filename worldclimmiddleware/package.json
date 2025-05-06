@@ -1,0 +1,57 @@
+{
+  "name": "regionmiddleware",
+  "version": "0.0.1",
+  "description": "Middleware para consumir el proyecto de regiones y mallas",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "DEBUG=express:router,verbs:*,snib-middleware:* nodemon --max-old-space-size=5000 src/server.js",
+    "lint": "eslint ."
+  },
+  "keywords": [
+    "express",
+    "conabio",
+    "snib"
+  ],
+  "engine": "node = 13.11.0",
+  "author": "Ecoinformática, CONABIO-C3",
+  "license": "GPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "dependencies": {
+    "body-parser": "^1.15.2",
+    "compression": "^1.7.3",
+    "connect-pg-simple": "^7.0.0",
+    "connect-timeout": "^1.9.0",
+    "cors": "^2.8.1",
+    "debug": "^3.0.1",
+    "dotenv": "^16.4.5",
+    "email-validator": "^2.0.4",
+    "express": "^4.18.2",
+    "express-flash": "0.0.2",
+    "express-pg-session": "^1.1.0",
+    "express-session": "^1.17.3",
+    "fs": "0.0.1-security",
+    "i": "^0.3.7",
+    "moment": "^2.15.1",
+    "node-fetch": "^2.6.9",
+    "node-schedule": "^2.1.0",
+    "node-scp": "0.0.21",
+    "nodemailer": "^6.8.0",
+    "npm": "^8.19.2",
+    "password-validator": "^5.3.0",
+    "pg": "^8.11.5",
+    "pg-promise": "^8.7.5",
+    "ssh2": "^1.11.0"
+  },
+  "devDependencies": {
+    "eslint": "^4.19.1",
+    "jsdoc": "^3.4.3",
+    "nodemon": "^1.18.9",
+    "pg-monitor": "^0.5.11",
+    "should": "^13.1.0",
+    "supertest": "~2.0.0",
+    "swagger-markdown": "^1.1.3"
+  }
+}
