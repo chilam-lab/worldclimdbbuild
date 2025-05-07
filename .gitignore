@@ -1,11 +1,10 @@
 .DS_store
+dbbuild/data/*.shp
+dbbuild/data/*.shx
+dbbuild/data/*.dbf
+dbbuild/data/*.prj
 dbbuild/data/input/*
 dbbuild/data/output/*
-dbbuild/shapes/*.shp
-dbbuild/shapes/*.dbf
-dbbuild/shapes/*.prj
-dbbuild/shapes/*.shx
-dbbuild/shapes/*.csv
 dbbuild/shapes/
 worldclimmiddleware/nodemodules
 .env
