@@ -41,7 +41,7 @@ exports.variables = function(req, res) {
 				from raster_bins rb 
 				group by id_fuentes_bio 
 			)
-			select 1 as id, 'Fuentes Worldclim' as variable, count(*) level_size, ('{"idfuente":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
+			select 1 as id, 'Fuente' as variable, count(*) level_size, ('{"idfuente":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
 			from fuentes_wc
 			union
 			(
@@ -51,7 +51,7 @@ exports.variables = function(req, res) {
 				group by layer
 				order by layer 
 			)
-			select 2 as id, 'Layers Worldclim' as variable, count(*) level_size, ('{"idfuente":"string","idlayer":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
+			select 2 as id, 'Layer' as variable, count(*) level_size, ('{"idfuente":"string","idlayer":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
 			from layers_wc
 			)
 			union
@@ -62,7 +62,7 @@ exports.variables = function(req, res) {
 				group by id_fuentes_bio,layer, icat 
 				order by id_fuentes_bio, layer, icat 
 			)
-			select 3 as id, 'Ranges Worldclim' as variable, count(*) level_size, ('{"idfuente":"string","idlayer":"string","idrange":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
+			select 3 as id, 'Rango' as variable, count(*) level_size, ('{"idfuente":"string","idlayer":"string","idrange":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
 			from ranges_wc
 			)
 			order by id`, {}).then( 
