@@ -35,25 +35,110 @@ Las tablas que son creadas por estos scripts se componen de la siguiente manera:
 
 ## Proyecto worldclimmiddleware
 
-Para obtener las librerias necesarias para el funcionamiento del proyecto, es necesario ejecutar el comando:
+Proyecto que implementa la capa de servicios web (API REST) que expone la información procesada para su consumo de WorldClim, variables bioclimáticas que describen patrones climáticos históricos.
 
-```bash
-npm install
+### Objetivo
+
+Exponer los datos climáticos procesados mediante una **API REST**, siguiendo el estándar de SPECIES v3.0, permitiendo su integración con:
+
+- Análisis de nicho ecológico
+- Cruce con ocurrencias biológicas
+- Visualización geoespacial
+
+---
+
+## Arquitectura general
+
+```
+worldclim/
+├── dbbuild/                 # Construcción de la base de datos
+├── worldclimmiddleware/     # API REST (Node.js + Express)
+│   └── src/
+│       ├── controllers/
+│       │   └── wc_controller.js
+│       ├── routes/
+│       │   └── worldclimrouter.js
+│       └── server.js
+├── README.md
 ```
 
-Para realizar la conexión a la base de datos es necesario crear o configurar las variables de entorno solicitadas en el archivo config.js
+---
 
-Para ejecutar el proyecto es necesario ejecutar el comando:
+### Tecnologías
 
-```bash
-npm start
+- Node.js
+- Express
+- PostgreSQL / PostGIS
+- Arquitectura MVC
+
+## Rutas del API
+
+### Ruta base
+
 ```
+GET /
+```
+Respuesta de bienvenida al API WorldClim.
 
-Se puede contribuir con la creación de servicios a través de este repositorio en ramas de desarrollo.
+### Variables disponibles
 
+```
+GET /variables
+POST /variables
+```
+Devuelve el catálogo de variables climáticas disponibles.
 
+### Variable por ID
 
+```
+GET /variables/:id
+POST /variables/:id
+```
+Obtiene metadatos de una variable específica.
 
+### Datos climáticos por variable
 
+```
+GET /get-data/:id
+POST /get-data/:id
+```
+Entrega las celdas y valores asociados a la variable solicitada.
 
+---
+
+## Estándar de interoperabilidad
+
+Este proyecto sigue la especificación definida en:
+
+🔗 https://github.com/CONABIO/species_v3.0
+
+Esto garantiza que la fuente WorldClim pueda combinarse con otras fuentes como:
+
+- SNIB
+- GBIF
+- WorldClim
+- Otras fuentes compatibles
+
+---
+
+## Casos de uso
+
+- Modelado de nicho ecológico
+- Análisis de correlación clima–especie
+- Visualización de capas climáticas discretizadas
+- Integración con plataformas SPECIES
+
+---
+
+## Licencia
+
+Este proyecto se distribuye bajo la licencia definida en el archivo `LICENSE` del repositorio.
+
+---
+
+## Créditos
+
+- Datos climáticos: **WorldClim**
+- Arquitectura y estándar: **SPECIES v3.0**
+- Implementación: CONABIO / Chilam Lab
 
