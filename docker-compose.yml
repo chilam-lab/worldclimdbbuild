@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  worldclim-middleware:
+    container_name: worldclimmiddleware
+    build:
+      context: ./worldclimmiddleware
+      dockerfile: Dockerfile
+    ports:
+      - "8989:8080"
+    restart: unless-stopped
+    environment:
+      # Puerto interno donde escucha Node
+      PORT: ${PORT:-8080}
+      # DB
+      DBHOST: ${DBHOST}
+      DBPORT: ${DBPORT:-5432}
+      DBNAME: ${DBNAME}
+      DBUSER: ${DBUSER}
+      DBPWD: ${DBPWD}
+      # DB MALLAS
+      DBHOST_MALLAS: ${DBHOST_MALLAS}
+      DBPORT_MALLAS: ${DBPORT_MALLAS:-5432}
+      DBNAME_MALLAS: ${DBNAME_MALLAS}
+      DBUSER_MALLAS: ${DBUSER_MALLAS}
+      DBPWD_MALLAS: ${DBPWD_MALLAS}
+
+      # Otros 
+      EUSER: ${EUSER}
+      EPASS: ${EPASS}
+      EHOST: ${EHOST}
+      EPORT: ${EPORT}
+      SEED: ${SEED}
+      TIME_TOKEN: ${TIME_TOKEN}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      ZACATUCHE_HOST: ${ZACATUCHE_HOST}
+      MANATI_HOST: ${MANATI_HOST}
+      SPECIES_HOST: ${SPECIES_HOST}
