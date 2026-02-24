@@ -29,5 +29,9 @@ router.route('/get-data/:id')
   .get(rwcCtrl.get_data_byid)
   .post(rwcCtrl.get_data_byid)
 
+router.route('/secuencia')
+  .get(rwcCtrl.secuencia)
+  .post(rwcCtrl.secuencia)
+
 
 module.exports = router;

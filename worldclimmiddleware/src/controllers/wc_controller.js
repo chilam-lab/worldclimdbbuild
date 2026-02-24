@@ -28,6 +28,12 @@ dic_wc_db.set('idfuente','id_fuentes_bio')
 dic_wc_db.set('idlayer','layer')
 dic_wc_db.set('idrange','bid')
 
+
+let dic_secuencia_db = new Map();
+dic_secuencia_db.set('Fuente','fuente')
+dic_secuencia_db.set('Layer','layer')
+dic_secuencia_db.set('Rango','tag')
+
 let fuente_bios = ['bio001','bio002','bio003','bio004','bio005','bio006','bio007','bio008','bio009','bio010','bio011','bio012','bio013','bio014','bio015','bio016','bio017','bio018','bio019']
 
 
@@ -79,6 +85,84 @@ exports.variables = function(req, res) {
       	error: error
       })
    	});
+}
+
+
+exports.secuencia = function(req, res) {
+
+	let { 
+		variableLevel,
+		variableValue,
+		nextVariableLevel
+	} = req.body;
+
+	console.log("variableLevel: " + dic_secuencia_db.get(variableLevel))
+	console.log("variableValue: " + variableValue)
+	console.log("nextVariableLevel: " + dic_secuencia_db.get(nextVariableLevel))
+
+	const query = ""
+
+	if(variableLevel == 'fuente'){
+
+		pool.any(`select distinct '$<nextVariableLevel:raw>' as value, rb.$<nextVariableLevel:raw> as label 
+					from fuentes_bioclimaticas fb join raster_bins rb  
+					on fb.id  = rb.id_fuentes_bio 
+					where fb.id = $<variableValue:raw>
+					order by rb.layer;`, {
+					variableLevel: dic_secuencia_db.get(variableLevel),
+					variableValue: variableValue,
+					nextVariableLevel: dic_secuencia_db.get(nextVariableLevel)
+				}).then( 
+			function(data) {
+				debug(data);
+
+
+			res.status(200).json({
+				data: data
+			})
+	  	})
+	  	.catch(error => {
+	      debug(error)
+	      res.status(403).json({
+	      	message: "error al obtener catalogo", 
+	      	error: error
+	      })
+	   	});
+
+	}
+	else{
+
+		pool.any(`select distinct '$<nextVariableLevel:raw>' as value, rb.$<nextVariableLevel:raw> as label 
+					from fuentes_bioclimaticas fb join raster_bins rb  
+					on fb.id  = rb.id_fuentes_bio 
+					where rb.layer = '$<variableValue:raw>'
+					order by rb.$<nextVariableLevel:raw>;`, {
+					variableLevel: dic_secuencia_db.get(variableLevel),
+					variableValue: variableValue,
+					nextVariableLevel: dic_secuencia_db.get(nextVariableLevel)
+				}).then( 
+			function(data) {
+				debug(data);
+
+
+			res.status(200).json({
+				data: data
+			})
+	  	})
+	  	.catch(error => {
+	      debug(error)
+	      res.status(403).json({
+	      	message: "error al obtener catalogo", 
+	      	error: error
+	      })
+	   	});
+
+
+	}
+
+
+
+	
 }
 
 
