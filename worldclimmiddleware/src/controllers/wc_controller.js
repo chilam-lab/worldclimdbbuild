@@ -8,13 +8,13 @@ var pool_mallas = verb_utils.pool_mallas
 
 
 let dic_wc_select = new Map();
-dic_wc_select.set('1','select array_agg(bid) as level_id, id_fuentes_bio, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area')
-dic_wc_select.set('2','select array_agg(bid) as level_id, array_agg(layer) as layers, id_fuentes_bio, layer, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area')
+dic_wc_select.set('1','select array_agg(bid) as level_id, id_fuentes_bio, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area ')
+dic_wc_select.set('2','select array_agg(bid) as level_id, array_agg(layer) as layers, id_fuentes_bio, layer, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area, rb."label"')
 dic_wc_select.set('3','select bid as level_id, tag, id_fuentes_bio, layer, icat, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area')
 
 let dic_wc_group = new Map();
-dic_wc_group.set('1','group by id_fuentes_bio, fb.fuente, fb.descripcion, fb.bins, fb.area')
-dic_wc_group.set('2','group by id_fuentes_bio, layer, fb.fuente, fb.descripcion, fb.bins, fb.area')
+dic_wc_group.set('1','group by id_fuentes_bio, fb.fuente, fb.descripcion, fb.bins, fb.area ')
+dic_wc_group.set('2','group by id_fuentes_bio, layer, fb.fuente, fb.descripcion, fb.bins, fb.area, rb."label"')
 dic_wc_group.set('3','')
 
 let dic_wc_order = new Map();
@@ -22,11 +22,23 @@ dic_wc_order.set('1','order by id_fuentes_bio')
 dic_wc_order.set('2','order by id_fuentes_bio, layer')
 dic_wc_order.set('3','order by bid')
 
-let valid_filters = ["idfuente","idlayer","idrange"]
+let valid_filters = ["idfuente","idlayer","idrange", "descripcion"]
+
+let dic_labeltocolumns = new Map();
+dic_labeltocolumns.set('fuente','descripcion')
+dic_labeltocolumns.set('idfuente','idfuente')
+
+dic_labeltocolumns.set('layer','idlayer')
+dic_labeltocolumns.set('rango','idrange')
+dic_labeltocolumns.set('Fuente','descripcion')
+dic_labeltocolumns.set('Layer','idlayer')
+dic_labeltocolumns.set('Rango','idrange')
+
 let dic_wc_db = new Map();
 dic_wc_db.set('idfuente','id_fuentes_bio')
 dic_wc_db.set('idlayer','layer')
 dic_wc_db.set('idrange','bid')
+dic_wc_db.set('descripcion','descripcion')
 
 
 let dic_secuencia_db = new Map();
@@ -102,13 +114,13 @@ exports.secuencia = function(req, res) {
 
 	const query = ""
 
-	if(variableLevel == 'fuente'){
+	if(variableLevel.toLowerCase() == 'fuente'){
 
-		pool.any(`select distinct '$<nextVariableLevel:raw>' as value, rb.$<nextVariableLevel:raw> as label 
+		pool.any(`select distinct '$<nextVariableLevel:raw>' as value, rb.$<nextVariableLevel:raw>, rb.label
 					from fuentes_bioclimaticas fb join raster_bins rb  
 					on fb.id  = rb.id_fuentes_bio 
 					where fb.id = $<variableValue:raw>
-					order by rb.layer;`, {
+					order by rb.$<nextVariableLevel:raw>;`, {
 					variableLevel: dic_secuencia_db.get(variableLevel),
 					variableValue: variableValue,
 					nextVariableLevel: dic_secuencia_db.get(nextVariableLevel)
@@ -132,11 +144,13 @@ exports.secuencia = function(req, res) {
 	}
 	else{
 
-		pool.any(`select distinct '$<nextVariableLevel:raw>' as value, rb.$<nextVariableLevel:raw> as label 
+		pool.any(`select distinct '$<nextVariableLevel:raw>' as value, 
+					'bid:' || rb.bid || ' | tag:' || (ROUND(split_part(rb.tag, ':', 1)::numeric, 4)::text
+					    || ':' || ROUND(split_part(rb.tag, ':', 2)::numeric, 4)::text)as label
 					from fuentes_bioclimaticas fb join raster_bins rb  
 					on fb.id  = rb.id_fuentes_bio 
 					where rb.layer = '$<variableValue:raw>'
-					order by rb.$<nextVariableLevel:raw>;`, {
+					order by label;`, {
 					variableLevel: dic_secuencia_db.get(variableLevel),
 					variableValue: variableValue,
 					nextVariableLevel: dic_secuencia_db.get(nextVariableLevel)
@@ -193,6 +207,7 @@ exports.get_variable_byid = function(req, res) {
 
 		if(array_queries.length == 0){
 			debug("Sin filtros definidos")
+			// query_array.push("")
 		}
 		else{
 			array_queries.forEach((filter, index) => {
@@ -202,17 +217,35 @@ exports.get_variable_byid = function(req, res) {
 
 				if(filter_pair.length == 0){
 					debug("Filtro indefinido")
+
+					res.status(403).json({	      	
+						error: "Sin filtros definidos", 
+						message: "Sin filtros definidos"
+					})
+					return
+					
 				}
 				else{
 					
 					let filter_param = filter_pair[0].trim()
 					debug("filter_param: " + filter_param)
+					debug("dic_labeltocolumns: " + dic_labeltocolumns.get(filter_param) )
 
+					if(valid_filters.indexOf( dic_labeltocolumns.get(filter_param) ) == -1){
+						debug("Uno o mas de tus filtros no son validos")
+						
+						res.status(403).json({	      	
+							error: "Uno o mas de tus filtros no son validos", 
+							message: "Uno o mas de tus filtros no son validos"
+						})
+						return
 
-					if(valid_filters.indexOf(filter_param) == -1){
-						debug("Filtro invalido")
 					}
 					else{
+
+						debug("Filtro Valido!")
+
+						filter_param_query = dic_labeltocolumns.get(filter_param).toLowerCase()
 						
 						if(filter_pair.length != 2){
 							debug("Filtro invalido por composición")
@@ -223,16 +256,32 @@ exports.get_variable_byid = function(req, res) {
 							let query_temp = "( "
 							filter_value.forEach((value, index) => {
 
-								if(filter_param == "idlayer"){
-									value = "'" + value + "'"
-								}
+								
+								if(filter_param_query == "idlayer" || filter_param_query == "descripcion"){
+									value = "'" + value + "%'"
 
-								if(index == 0){
-									query_temp = query_temp + dic_wc_db.get(filter_param) + " = " + value
+									if(index == 0){
+										query_temp = query_temp + dic_wc_db.get(filter_param_query) + " like " + value
+									}
+									else{
+										query_temp = query_temp + " or " + dic_wc_db.get(filter_param_query) + " like " + value + " "
+									}
 								}
 								else{
-									query_temp = query_temp + " or " + dic_wc_db.get(filter_param) + " = " + value + " "
+									value = "'" + value + "'"
+
+									if(index == 0){
+										query_temp = query_temp + dic_wc_db.get(filter_param_query) + " = " + value
+									}
+									else{
+										query_temp = query_temp + " or " + dic_wc_db.get(filter_param_query) + " = " + value + " "
+									}
 								}
+
+								debug("value: " + value)
+
+
+								
 
 							})
 							query_temp = query_temp + " )"
@@ -272,6 +321,15 @@ exports.get_variable_byid = function(req, res) {
 		query = query.replace("{group}", val_dic_wc_group)
 		query = query.replace("{order}", val_dic_wc_order)
 
+		if(query_array.length == 0){
+			res.status(403).json({	      	
+		      	error: "No hubo coincidencias con los parametros recibidos", 
+		      	message: "No hubo coincidencias con los parametros recibidos"
+		      })
+			debug("No hubo coincidencias con los parametros recibidos")
+			return
+		}
+
 		query_array.forEach((query_temp, index) => {
 			if (index==0) {
 				query = query.replace("{queries}", " where " + query_temp + " {queries} ")
@@ -297,8 +355,13 @@ exports.get_variable_byid = function(req, res) {
 				temp.id = variable_id
 				temp.level_id = item.level_id
 				temp.data = {}
-				if(variable_id == '2' || variable_id == '3')
-					temp.data.layer = item.layer					
+				
+
+				if(variable_id == '2' || variable_id == '3'){
+					temp.data.layer = item.layer						
+					temp.data.label = item.label
+				}
+					
 				if(variable_id == '3')
 					temp.data.tag = item.tag					
 				temp.data.descripcion = item.descripcion
@@ -339,6 +402,8 @@ exports.get_variable_byid = function(req, res) {
 
 exports.get_data_byid = async function (req, res) {
 
+	debug("get_data_byid")
+
     try {
         // const id = req.params.id;
         let variable_id = req.params.id
@@ -348,6 +413,11 @@ exports.get_data_byid = async function (req, res) {
         const levels_id = verb_utils.getParam(req, 'levels_id', []);
         const filter_names = verb_utils.getParam(req, 'filter_names', []);
         const filter_values = verb_utils.getParam(req, 'filter_values', []);
+
+		debug("grid_id: " + grid_id)
+		debug(levels_id)
+		debug(filter_names)
+		debug(filter_values)
 
         let filter_array = []
 
@@ -368,16 +438,22 @@ exports.get_data_byid = async function (req, res) {
 		val_dic_wc_group = dic_wc_group.get(variable_id)
 		val_dic_wc_order = dic_wc_order.get(variable_id)
 
+		debug("val_dic_wc_select: " + val_dic_wc_select)
+		debug("val_dic_wc_group: " + val_dic_wc_group)
+		debug("val_dic_wc_order: " + val_dic_wc_order)
+		
 
 		let queryLevels = `{select}
 					from fuentes_bioclimaticas fb 
 					join raster_bins rb 
 					on fb.id = rb.id_fuentes_bio
 					WHERE bid IN ($<bids:raw>)
+					{filters}
 					{group}
 					{order}`
 
 		queryLevels = queryLevels.replace("{select}", val_dic_wc_select)
+		queryLevels = queryLevels.replace("{filters}", "{filters}")
 		queryLevels = queryLevels.replace("{group}", val_dic_wc_group)
 		queryLevels = queryLevels.replace("{order}", val_dic_wc_order)
 
@@ -392,17 +468,24 @@ exports.get_data_byid = async function (req, res) {
 
         let filter_query = ""
 
-        filter_array.forEach((filter_item) => {	
+        filter_array.forEach((filter_item, index) => {	
         	debug(filter_item)
 
-        	if(filter_item.filter_param == "idlayer"){
-        		filter_item.filter_value = "'" + filter_item.filter_value + "'"
-        	}
+			const column_name = dic_wc_db.get(filter_item.filter_param)
+			if(!column_name){
+				return
+			}
 
-			filter_query += filter_query + " and " + dic_wc_db.get(filter_item.filter_param) + " = " + filter_item.filter_value
+			let filter_value = filter_item.filter_value
+			if(filter_item.filter_param == "idlayer" || filter_item.filter_param == "descripcion"){
+				filter_value = "'" + String(filter_value).replace(/'/g, "''") + "'"
+			}
+
+			filter_query += " and " + column_name + " = " + filter_value
 		})
 
-		// debug("filter_query: " + filter_query)
+		debug("filter_query: " + filter_query)
+		queryLevels = queryLevels.replace("{filters}", filter_query)
 
         // Ejecuta la primera consulta
         const levelsIds = await pool.any(queryLevels, {bids: levels_id.toString(), filters: filter_query});
@@ -415,10 +498,14 @@ exports.get_data_byid = async function (req, res) {
 
         let queryBioParts = [];
 
+		debug("levelsIds.length: " + levelsIds.length)
+
 		// levelsIds.forEach((item, index) => {
 		for(item of levelsIds){
 
-			
+			debug(item)
+			debug("item.layer: " + item.layer)
+
             const bid = item.level_id;
             let tableBio;
             let layer;
@@ -431,7 +518,6 @@ exports.get_data_byid = async function (req, res) {
 			data.area = item.area
 			data.idfuente = item.id_fuentes_bio
 
-			
 			if(variable_id == '1'){
 				fuentes = item.id_fuentes_bio
 				debug("fuentes: " + fuentes)
@@ -458,7 +544,6 @@ exports.get_data_byid = async function (req, res) {
             let poligonResult;
 
             if(variable_id == '1'){
-            	
             	
             	for(idfuente of fuentes.toString()){
             		
@@ -496,25 +581,34 @@ exports.get_data_byid = async function (req, res) {
 
             	}
 
-	            poligonResult = await pool.one(query_temp, {bid: data.idfuente, data: data});
+	            poligonResult = await pool.oneOrNone(query_temp, {bid: data.idfuente, data: data});
 
 			}
             if(variable_id == '2'){
-				query_temp = `SELECT '$<layer:raw>' as bid, ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) as union_geom, '$<data:raw>'::jsonb as datos
+				query_temp = `SELECT $<bid:raw> as bid, ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) as union_geom, '$<data:raw>'::jsonb as datos
 	                FROM $<tableBio:raw>
 	                WHERE categoria = '$<layer:raw>'`
-	            poligonResult = await pool.one(query_temp, {bid: bid, tableBio: tableBio, layer: layer, data: data});
+	            poligonResult = await pool.oneOrNone(query_temp, {bid: bid, tableBio: tableBio, layer: layer, data: data});
 
 			}
             if(variable_id == '3'){
             	query_temp = `SELECT $<bid:raw> as bid, ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) as union_geom, '$<data:raw>'::jsonb as datos
 	                FROM $<tableBio:raw>
 	                WHERE categoria = '$<layer:raw>' AND icat = $<icat:raw>`
-	            poligonResult = await pool.one(query_temp, {bid: bid, tableBio: tableBio, layer: layer, icat:icat, data: data});
+	            poligonResult = await pool.oneOrNone(query_temp, {bid: bid, tableBio: tableBio, layer: layer, icat:icat, data: data});
 
             }
-            
-            queryBioParts.push(poligonResult)
+
+			if(!poligonResult || !poligonResult.union_geom){
+				queryBioParts.push({
+					bid: bid,
+					union_geom: null,
+					datos: data
+				})
+			}
+			else{
+				queryBioParts.push(poligonResult)
+			}
 
         }
 
@@ -523,7 +617,7 @@ exports.get_data_byid = async function (req, res) {
         debug("grid_id: " + grid_id)
 
         const query_catgrid_temp = `
-                select region_id, table_cell_name 
+                select region_id, table_cell_name, table_view_name 
 				from cat_grid cg  
 				where grid_id = $<grid_id:raw>`
 
@@ -531,11 +625,19 @@ exports.get_data_byid = async function (req, res) {
 
         const tablename = table_cell_item.table_cell_name
         let colunmname = tablename
+
+		const table_view_name = table_cell_item.table_view_name
+
+		const region_id = table_cell_item.region_id
+
         colunmname = colunmname.replace(/grid_/g,"")
         colunmname = colunmname.replace(/_aoi/g,"")
         colunmname = "gridid_" + colunmname
-        debug("tablename: " + tablename)
+        
+		debug("region_id: " + region_id)
+		debug("tablename: " + tablename)
         debug("colunmname: " + colunmname)
+		debug("table_view_name: " + table_view_name)
 
         let response_array = []
 
@@ -544,20 +646,52 @@ exports.get_data_byid = async function (req, res) {
 
         	// debug(poligonResult)
         	
-        	query_temp = `with intersectCells as (
-							select distinct '$<bid:raw>' as bid, g.$<colunmname:raw> as cell
-							from  $<tablename:raw> as g
-							join (
-								select 
-								ST_SetSRID(ST_GeomFromText('$<poligonResult:raw>'),4326) as geom
-								) as p
-							ON ST_Intersects(g.the_geom, p.geom)
-						)
-						select bid, array_agg(cell) as cells
-						from intersectCells
-						group by bid`
+        	query_temp = `with regionarea as (select g.$<colunmname:raw>, g.the_geom
+				from $<tablename:raw> as g
+				join $<table_view_name:raw> vg
+				on ST_Intersects(g.the_geom, vg.border)  
+				where vg.region_id = $<region_id:raw>
+			),
+			intersectCells as (
+				select distinct '$<bid:raw>' as bid, g.$<colunmname:raw> as cell
+				from  regionarea as g
+				join (
+					select 
+					ST_SetSRID(ST_GeomFromText('$<poligonResult:raw>'),4326) as geom
+					) as p
+				ON ST_Intersects(g.the_geom, p.geom)
+			)
+			select bid, array_agg(cell) as cells
+			from intersectCells
+			group by bid`
+			
+			debug("query_temp: " + query_temp)
 
-			inersectResult = await pool_mallas.one(query_temp, {poligonResult: poligonResult.union_geom, bid: poligonResult.bid, colunmname:colunmname, tablename:tablename});
+			if(!poligonResult.union_geom){
+				response_array.push({
+					id: variable_id,
+					grid_id: grid_id,
+					level_id: poligonResult.bid,
+					cells: [],
+					n: 0,
+					metadata: poligonResult.datos
+				})
+				continue
+			}
+
+			inersectResult = await pool_mallas.oneOrNone(query_temp, {table_view_name: table_view_name, region_id: region_id, poligonResult: poligonResult.union_geom, bid: poligonResult.bid, colunmname:colunmname, tablename:tablename});
+
+			if(!inersectResult || !inersectResult.cells){
+				response_array.push({
+					id: variable_id,
+					grid_id: grid_id,
+					level_id: poligonResult.bid,
+					cells: [],
+					n: 0,
+					metadata: poligonResult.datos
+				})
+				continue
+			}
 
 			response_array.push({
 				id: variable_id,
@@ -582,4 +716,3 @@ exports.get_data_byid = async function (req, res) {
     }
 
 };
-
