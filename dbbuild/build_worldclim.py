@@ -36,6 +36,8 @@ calculos_abio        = './sql/calculos_abio.sql'
 # insert_info_grid     = './sql/insert_info_grid.sql'
 bioclim_vars_info    = './sql/bioclim_vars_info.sql'
 update_label_var     = './sql/update_label_var.sql'
+create_wc_data_source = './sql/create_wc_data_source.sql'
+seed_wc_data_source_worldclim = './sql/seed_wc_data_source_worldclim.sql'
 
 logger = setup_logger()
 load_dotenv() 
@@ -100,6 +102,32 @@ try:
 
 except Exception as e:
     logger.error('No se pudo instalar las extensiones necesarias o crear y llenar la tabla aoi a nivel mundial: {0}'.format(str(e)))
+    sys.exit()
+
+
+# Creación de tabla de fuente de datos y registro base
+try:
+
+    logger.info('Creación de tabla data_source_info y carga de registro base')
+
+    create_wc_data_source_sql = get_sql(create_wc_data_source)
+    seed_wc_data_source_worldclim_sql = get_sql(seed_wc_data_source_worldclim)
+
+    conn = psycopg2.connect('dbname={0} host={1} port={2} user={3} password={4}'.format(DBNICHENAME, DBNICHEHOST, DBNICHEPORT, DBNICHEUSER, DBNICHEPASSWD))
+    conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+    cur = conn.cursor()
+
+    cur.execute(create_wc_data_source_sql)
+    logger.info('create_wc_data_source_sql')
+
+    cur.execute(seed_wc_data_source_worldclim_sql)
+    logger.info('seed_wc_data_source_worldclim_sql')
+
+    cur.close()
+    conn.close()
+
+except Exception as e:
+    logger.error('No se pudo crear/cargar la tabla data_source_info: {0}'.format(str(e)))
     sys.exit()
 
 
@@ -192,11 +220,10 @@ try:
     logger.info('create_abiotic_table_sql')
 
     with open(sources_file, 'r') as f:
-    	reader = csv.reader(f)
-    	for line in reader:
-    		# logger.info('linea: {0} - {1}'.format(line[2], line[3]))
-    		source = line[2]
-    		description = line[3]
+        reader = csv.reader(f)
+        for line in reader:
+                source = line[2]
+                description = line[3]
 
     # poner la lista de gridids existentes
     available_grids = "ARRAY[]"
@@ -293,8 +320,8 @@ try:
 
         # espera hasta que el archivo sea creado
         while not os.path.exists(tags):
-        	time.sleep(2)
-
+              time.sleep(2)
+        
         tags_file = open(tags, 'r')
         tags_file = tags_file.read().splitlines()
 
@@ -340,9 +367,9 @@ try:
                 maxval = tag.split(":")[1]
                 
                 if contador-1 > indice:
-                	ifelse_query_layer = ifelse_query_layer + " WHEN (DN / 100.0) BETWEEN " + minval + " AND " + maxval + " THEN '" + layer + "' "
+                      ifelse_query_layer = ifelse_query_layer + " WHEN (DN / 100.0) BETWEEN " + minval + " AND " + maxval + " THEN '" + layer + "' "
                 else:
-                	ifelse_query_layer = ifelse_query_layer + " ELSE '" + layer + "' "
+                      ifelse_query_layer = ifelse_query_layer + " ELSE '" + layer + "' "
 
             ifelse_query_layer = ifelse_query_layer + " END AS categoria, "
             f.seek(0)
@@ -394,9 +421,9 @@ try:
         stdout, stderr = p.communicate()
 
         if p.returncode != 0:
-        	logger.error('Error al convertir valor raster x100: {}'.format(stderr.decode('utf-8')))
+              logger.error('Error al convertir valor raster x100: {}'.format(stderr.decode('utf-8')))
         else:
-        	logger.info('Multiplicación x100 completada. Archivo de salida: {}'.format(final_namex100))
+             logger.info('Multiplicación x100 completada. Archivo de salida: {}'.format(final_namex100))
 
 
         # paso 2. Vectorización del raster
@@ -408,9 +435,9 @@ try:
         stdout, stderr = p.communicate()
 
         if p.returncode != 0:
-        	logger.error('Error al vectorizar el raster: {}'.format(stderr.decode('utf-8')))
+             logger.error('Error al vectorizar el raster: {}'.format(stderr.decode('utf-8')))
         else:
-        	logger.info('Vectorización completada. Archivo de salida: {}'.format(final_shape))
+             logger.info('Vectorización completada. Archivo de salida: {}'.format(final_shape))
         
 
         # paso 3. División shape entre 100 (Se realiza un recorte para quitar datos fuera de las celdas y se enlazan valores de icat y layer)
@@ -427,9 +454,9 @@ try:
         stdout, stderr = p.communicate()
 
         if p.returncode != 0:
-        	logger.error('Error al dividir Shapefile: {}'.format(stderr.decode('utf-8')))
+             logger.error('Error al dividir Shapefile: {}'.format(stderr.decode('utf-8')))
         else:
-        	logger.info('División completada. Archivo de salida: {}'.format(final_shape_decimal))
+             logger.info('División completada. Archivo de salida: {}'.format(final_shape_decimal))
 
 
         # paso 4. Guardado en base de datos
@@ -446,43 +473,37 @@ try:
         stdout, stderr = p.communicate()
 
         if p.returncode != 0:
-        	logger.error('Error al guardar Shapefile en DB: {}'.format(stderr.decode('utf-8')))
+             logger.error('Error al guardar Shapefile en DB: {}'.format(stderr.decode('utf-8')))
         else:
-        	logger.info('Guardado completado. Tabla de salida: {}'.format(final_table_name))
+             logger.info('Guardado completado. Tabla de salida: {}'.format(final_table_name))
 
 
         # paso 5. Removiendo archivos inecesarios
         innecesarios.append(output_shape_folder+"out.shp")
         for file_inn in innecesarios:
-        	
-        	if os.path.exists(file_inn):
-        		
-        		os.remove(file_inn)
-        		logger.info("Archivo {} eliminado.".format(file_inn))
+             if os.path.exists(file_inn):
+                os.remove(file_inn)
+                logger.info("Archivo {} eliminado.".format(file_inn))
+                logger.info("extension: {}".format(Path(file_inn).suffix))
 
-        		logger.info("extension: {}".format(Path(file_inn).suffix))
-        		
-        		if Path(file_inn).suffix == ".shp":
-        			shpfile_name = os.path.splitext(get_basename(file_inn))[0]
-        			logger.info('shpfile_name: {}'.format(shpfile_name))
-        			
-        			for othr_ext in ['.dbf','.prj','.shx']:
-        				if os.path.exists(shpfile_name+othr_ext):
-        					os.remove(shpfile_name+othr_ext)
-        					logger.info("Archivo '{}' eliminado.".format(shpfile_name+othr_ext))
-        				else:
-        					logger.info("El archivo '{}' no existe.".format(shpfile_name+othr_ext))
-        	else:
-        		logger.info("El archivo '{}' no existe.".format(file_inn))
+                if Path(file_inn).suffix == ".shp":
+                    shpfile_name = os.path.splitext(get_basename(file_inn))[0]
+                    logger.info('shpfile_name: {}'.format(shpfile_name))
+                
+                for othr_ext in ['.dbf','.prj','.shx']:   
+                    if os.path.exists(shpfile_name+othr_ext):
+                        os.remove(shpfile_name+othr_ext)
+                        logger.info("Archivo '{}' eliminado.".format(shpfile_name+othr_ext))
+                    else:
+                        logger.info("El archivo '{}' no existe.".format(shpfile_name+othr_ext))
+             else:
+                  logger.info("El archivo '{}' no existe.".format(file_inn))
 
         number_var += 1
 
 except Exception as e:
     logger.error('Error al obtener archivos a discretizar: {0}'.format(str(e)))
     sys.exit()
-
-
-
 
 
 # Se insertan metadatos de las variables abioticas
@@ -517,4 +538,3 @@ try:
 except Exception as e:
     logger.error('No se pudo crear la tabla de variables abioticas: {0}'.format(str(e)))
     sys.exit()
-
