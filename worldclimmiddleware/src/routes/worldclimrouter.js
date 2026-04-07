@@ -21,6 +21,10 @@ router.route('/variables')
   .get(rwcCtrl.variables)
   .post(rwcCtrl.variables)
 
+router.route('/info')
+  .get(rwcCtrl.get_sourceinfo)
+  .post(rwcCtrl.get_sourceinfo)
+
 router.route('/variables/:id')
   .get(rwcCtrl.get_variable_byid)
   .post(rwcCtrl.get_variable_byid)

@@ -48,671 +48,554 @@ dic_secuencia_db.set('Rango','tag')
 
 let fuente_bios = ['bio001','bio002','bio003','bio004','bio005','bio006','bio007','bio008','bio009','bio010','bio011','bio012','bio013','bio014','bio015','bio016','bio017','bio018','bio019']
 
-
-exports.variables = function(req, res) {
-
-	let { } = req.body;
-
-	// Se recomienda agregar la columna available_grids a este catalogo con ayuda de los servicios disponibles del proyecto regionmiddleware
-	pool.any(`with fuentes_wc as(
-				select id_fuentes_bio 
-				from raster_bins rb 
-				group by id_fuentes_bio 
-			)
-			select 1 as id, 'Fuente' as variable, count(*) level_size, ('{"idfuente":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
-			from fuentes_wc
-			union
-			(
-			with layers_wc as(
-				select layer  
-				from raster_bins rb 
-				group by layer
-				order by layer 
-			)
-			select 2 as id, 'Layer' as variable, count(*) level_size, ('{"idfuente":"string","idlayer":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
-			from layers_wc
-			)
-			union
-			(
-			with ranges_wc as(
-				select id_fuentes_bio, layer, icat  
-				from raster_bins rb 
-				group by id_fuentes_bio,layer, icat 
-				order by id_fuentes_bio, layer, icat 
-			)
-			select 3 as id, 'Rango' as variable, count(*) level_size, ('{"idfuente":"string","idlayer":"string","idrange":"string"}')::jsonb filter_fields, array[1,2,3,4,5,6]::int[] as available_grids
-			from ranges_wc
-			)
-			order by id`, {}).then( 
-		function(data) {
-			// debug(data);
-		res.status(200).json({
-			data: data
-		})
-  	})
-  	.catch(error => {
-      debug(error)
-      res.status(403).json({
-      	message: "error al obtener catalogo", 
-      	error: error
-      })
-   	});
-}
-
-
-exports.secuencia = function(req, res) {
-
-	let { 
-		variableLevel,
-		variableValue,
-		nextVariableLevel
-	} = req.body;
-
-	console.log("variableLevel: " + dic_secuencia_db.get(variableLevel))
-	console.log("variableValue: " + variableValue)
-	console.log("nextVariableLevel: " + dic_secuencia_db.get(nextVariableLevel))
-
-	const query = ""
-
-	if(variableLevel.toLowerCase() == 'fuente'){
-
-		pool.any(`select distinct '$<nextVariableLevel:raw>' as value, rb.$<nextVariableLevel:raw>, rb.label
-					from fuentes_bioclimaticas fb join raster_bins rb  
-					on fb.id  = rb.id_fuentes_bio 
-					where fb.id = $<variableValue:raw>
-					order by rb.$<nextVariableLevel:raw>;`, {
-					variableLevel: dic_secuencia_db.get(variableLevel),
-					variableValue: variableValue,
-					nextVariableLevel: dic_secuencia_db.get(nextVariableLevel)
-				}).then( 
-			function(data) {
-				debug(data);
-
-
-			res.status(200).json({
-				data: data
-			})
-	  	})
-	  	.catch(error => {
-	      debug(error)
-	      res.status(403).json({
-	      	message: "error al obtener catalogo", 
-	      	error: error
-	      })
-	   	});
-
-	}
-	else{
-
-		pool.any(`select distinct '$<nextVariableLevel:raw>' as value, 
-					'bid:' || rb.bid || ' | tag:' || (ROUND(split_part(rb.tag, ':', 1)::numeric, 4)::text
-					    || ':' || ROUND(split_part(rb.tag, ':', 2)::numeric, 4)::text)as label
-					from fuentes_bioclimaticas fb join raster_bins rb  
-					on fb.id  = rb.id_fuentes_bio 
-					where rb.layer = '$<variableValue:raw>'
-					order by label;`, {
-					variableLevel: dic_secuencia_db.get(variableLevel),
-					variableValue: variableValue,
-					nextVariableLevel: dic_secuencia_db.get(nextVariableLevel)
-				}).then( 
-			function(data) {
-				debug(data);
-
-
-			res.status(200).json({
-				data: data
-			})
-	  	})
-	  	.catch(error => {
-	      debug(error)
-	      res.status(403).json({
-	      	message: "error al obtener catalogo", 
-	      	error: error
-	      })
-	   	});
-
-
-	}
-
-
-
-	
-}
-
-
-exports.get_variable_byid = function(req, res) {
-
-	let variable_id = req.params.id
-	debug("variable_id: " + variable_id)
-
-	let q = verb_utils.getParam(req, 'q', '')
-	let offset = verb_utils.getParam(req, 'offset', 0)
-	let limit = verb_utils.getParam(req, 'limit', 10)
-
-	debug("q: " + q)
-	debug("offset: " + offset)
-	debug("limit: " + limit)
-
-	let query_array = []
-	let filter_separator = ";"
-	let pair_separator = "="
-	let group_separator = ","
-
-	// q: "idfuente = 1; idlayer = bio018; idrange = 300450"
-	
-	if(q != ""){
-
-		let array_queries = q.split(filter_separator)
-		debug(array_queries)
-
-		if(array_queries.length == 0){
-			debug("Sin filtros definidos")
-			// query_array.push("")
-		}
-		else{
-			array_queries.forEach((filter, index) => {
-
-				let filter_pair = filter.split(pair_separator)
-				debug(filter_pair)
-
-				if(filter_pair.length == 0){
-					debug("Filtro indefinido")
-
-					res.status(403).json({	      	
-						error: "Sin filtros definidos", 
-						message: "Sin filtros definidos"
-					})
-					return
-					
-				}
-				else{
-					
-					let filter_param = filter_pair[0].trim()
-					debug("filter_param: " + filter_param)
-					debug("dic_labeltocolumns: " + dic_labeltocolumns.get(filter_param) )
-
-					if(valid_filters.indexOf( dic_labeltocolumns.get(filter_param) ) == -1){
-						debug("Uno o mas de tus filtros no son validos")
-						
-						res.status(403).json({	      	
-							error: "Uno o mas de tus filtros no son validos", 
-							message: "Uno o mas de tus filtros no son validos"
-						})
-						return
-
-					}
-					else{
-
-						debug("Filtro Valido!")
-
-						filter_param_query = dic_labeltocolumns.get(filter_param).toLowerCase()
-						
-						if(filter_pair.length != 2){
-							debug("Filtro invalido por composición")
-						}
-						else{
-							let filter_value = filter_pair[1].trim().split(group_separator)	
-							
-							let query_temp = "( "
-							filter_value.forEach((value, index) => {
-
-								
-								if(filter_param_query == "idlayer" || filter_param_query == "descripcion"){
-									value = "'" + value + "%'"
-
-									if(index == 0){
-										query_temp = query_temp + dic_wc_db.get(filter_param_query) + " like " + value
-									}
-									else{
-										query_temp = query_temp + " or " + dic_wc_db.get(filter_param_query) + " like " + value + " "
-									}
-								}
-								else{
-									value = "'" + value + "'"
-
-									if(index == 0){
-										query_temp = query_temp + dic_wc_db.get(filter_param_query) + " = " + value
-									}
-									else{
-										query_temp = query_temp + " or " + dic_wc_db.get(filter_param_query) + " = " + value + " "
-									}
-								}
-
-								debug("value: " + value)
-
-
-								
-
-							})
-							query_temp = query_temp + " )"
-							query_array.push(query_temp)
-
-						}
-
-					}
-
-				}
-
-			})	
-
-			debug(query_array)
-
-		}
-
-	}
-
-
-	pool.task(t => {
-
-		val_dic_wc_select = dic_wc_select.get(variable_id)
-		val_dic_wc_group = dic_wc_group.get(variable_id)
-		val_dic_wc_order = dic_wc_order.get(variable_id)
-
-
-		let query = `{select}
-					from fuentes_bioclimaticas fb 
-					join raster_bins rb 
-					on fb.id = rb.id_fuentes_bio
-					{queries}
-					{group}
-					{order}`
-
-		query = query.replace("{select}", val_dic_wc_select)
-		query = query.replace("{group}", val_dic_wc_group)
-		query = query.replace("{order}", val_dic_wc_order)
-
-		if(query_array.length == 0){
-			res.status(403).json({	      	
-		      	error: "No hubo coincidencias con los parametros recibidos", 
-		      	message: "No hubo coincidencias con los parametros recibidos"
-		      })
-			debug("No hubo coincidencias con los parametros recibidos")
-			return
-		}
-
-		query_array.forEach((query_temp, index) => {
-			if (index==0) {
-				query = query.replace("{queries}", " where " + query_temp + " {queries} ")
-			}
-			else{
-				query = query.replace("{queries}", " and " + query_temp + " {queries} ")
-			}
-			
-		})
-		query = query.replace("{queries}", "")
-
-		debug(query)
-
-
-		return t.any(query).then(resp => {
-
-			let response_array = []
-
-			resp.forEach((item, index) => {
-
-				var temp = {}				
-
-				temp.id = variable_id
-				temp.level_id = item.level_id
-				temp.data = {}
-				
-
-				if(variable_id == '2' || variable_id == '3'){
-					temp.data.layer = item.layer						
-					temp.data.label = item.label
-				}
-					
-				if(variable_id == '3')
-					temp.data.tag = item.tag					
-				temp.data.descripcion = item.descripcion
-				temp.data.bins = item.bins
-				temp.data.area = item.area
-				temp.data.icat = item.icat
-				temp.data.idfuente = item.id_fuentes_bio
-
-				response_array.push(temp)
-
-			})
-
-			res.status(200).json({
-				data: response_array
-			})
-
-
-		}).catch(error => {
-	      debug(error)
-
-	      res.status(403).json({	      	
-	      	error: "Error al obtener la malla solicitada", 
-	      	message: "error al obtener datos"
-	      })
-	   	})
-
-	}).catch(error => {
-      debug(error)
-      res.status(403).json({
-      	message: "error general", 
-      	error: error
-      })
-   	});
-  	
-}
-
-
-
-exports.get_data_byid = async function (req, res) {
-
-	debug("get_data_byid")
-
-    try {
-        // const id = req.params.id;
-        let variable_id = req.params.id
-		debug("variable_id: " + variable_id)
-
-        const grid_id = verb_utils.getParam(req, 'grid_id', 1);
-        const levels_id = verb_utils.getParam(req, 'levels_id', []);
-        const filter_names = verb_utils.getParam(req, 'filter_names', []);
-        const filter_values = verb_utils.getParam(req, 'filter_values', []);
-
-		debug("grid_id: " + grid_id)
-		debug(levels_id)
-		debug(filter_names)
-		debug(filter_values)
-
-        let filter_array = []
-
-        if (levels_id.length === 0) {
-            return res.status(404).json({ message: "No se proporcionaron levels_id." });
-        }
-
-		if(filter_names.length > 0){
-			filter_names.forEach((filter_name, index) => {
-				let filter_temp = {}
-				filter_temp = {filter_param: filter_name, filter_value: filter_values[index]}
-				filter_array.push(filter_temp)
-			})
-		}
-
-
-		val_dic_wc_select = dic_wc_select.get(variable_id)
-		val_dic_wc_group = dic_wc_group.get(variable_id)
-		val_dic_wc_order = dic_wc_order.get(variable_id)
-
-		debug("val_dic_wc_select: " + val_dic_wc_select)
-		debug("val_dic_wc_group: " + val_dic_wc_group)
-		debug("val_dic_wc_order: " + val_dic_wc_order)
-		
-
-		let queryLevels = `{select}
-					from fuentes_bioclimaticas fb 
-					join raster_bins rb 
-					on fb.id = rb.id_fuentes_bio
-					WHERE bid IN ($<bids:raw>)
-					{filters}
-					{group}
-					{order}`
-
-		queryLevels = queryLevels.replace("{select}", val_dic_wc_select)
-		queryLevels = queryLevels.replace("{filters}", "{filters}")
-		queryLevels = queryLevels.replace("{group}", val_dic_wc_group)
-		queryLevels = queryLevels.replace("{order}", val_dic_wc_order)
-
-
-        // const queryLevels = `
-        //     SELECT bid, layer, icat, id_fuentes_bio, "label", fb.bins
-        //     FROM raster_bins rb
-        //     JOIN fuentes_bioclimaticas fb ON fb.id = rb.id_fuentes_bio
-        //     WHERE bid IN ($<bids:raw>)
-        //     $<filters:raw>
-        // `;
-
-        let filter_query = ""
-
-        filter_array.forEach((filter_item, index) => {	
-        	debug(filter_item)
-
-			const column_name = dic_wc_db.get(filter_item.filter_param)
-			if(!column_name){
-				return
-			}
-
-			let filter_value = filter_item.filter_value
-			if(filter_item.filter_param == "idlayer" || filter_item.filter_param == "descripcion"){
-				filter_value = "'" + String(filter_value).replace(/'/g, "''") + "'"
-			}
-
-			filter_query += " and " + column_name + " = " + filter_value
-		})
-
-		debug("filter_query: " + filter_query)
-		queryLevels = queryLevels.replace("{filters}", filter_query)
-
-        // Ejecuta la primera consulta
-        const levelsIds = await pool.any(queryLevels, {bids: levels_id.toString(), filters: filter_query});
-
-        debug(levelsIds)
-        
-        if (levelsIds.length === 0) {
-            return res.status(404).json({ message: "No se encontraron niveles." });
-        }
-
-        let queryBioParts = [];
-
-		debug("levelsIds.length: " + levelsIds.length)
-
-		// levelsIds.forEach((item, index) => {
-		for(item of levelsIds){
-
-			debug(item)
-			debug("item.layer: " + item.layer)
-
-            const bid = item.level_id;
-            let tableBio;
-            let layer;
-            let fuentes;
-            let icat;
-            let data = {}
-
-            data.descripcion = item.descripcion
-			data.bins = item.bins
-			data.area = item.area
-			data.idfuente = item.id_fuentes_bio
-
-			if(variable_id == '1'){
-				fuentes = item.id_fuentes_bio
-				debug("fuentes: " + fuentes)
-			}
-			if(variable_id == '2' || variable_id == '3'){
-				tableBio = `${item.layer}_q${item.bins}`;
-				layer = item.layer;
-				data.layer = item.layer;
-				debug("tableBio: " + tableBio)
-				debug("layer: " + layer)
-			}
-			if(variable_id == '3'){
-				icat = item.icat;
-				data.tag = item.tag
-				data.icat = item.icat	
-				debug("icat: " + icat)
-            
-			}
-			
-            debug("bid: " + bid)
-            debug(data)
-
-            let query_temp = "";
-            let poligonResult;
-
-            if(variable_id == '1'){
-            	
-            	for(idfuente of fuentes.toString()){
-            		
-            		if(idfuente == 1){
-            			q = "_q20"
-            		}
-            		else if(idfuente == 2){
-            			q = "_q10"
-            		}
-            		debug("q: " + q)
-            		
-            		let conti = 0
-
-            		query_temp = "with bios as ( "
-
-            		// for(fuente_bio of fuente_bios.slice(0, 2)){
-            		for(fuente_bio of fuente_bios){
-            			tableBio = fuente_bio + q
-            			debug("tableBio: " + tableBio)
-
-            			if(conti == 0){
-	            			query_temp = query_temp + `SELECT $<bid:raw> as bid, ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) as union_geom, '$<data:raw>'::jsonb as datos
-		                	FROM ${tableBio} `
-	            		}
-	            		else{
-	            			query_temp = query_temp + ` UNION SELECT $<bid:raw> as bid, ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) as union_geom, '$<data:raw>'::jsonb as datos
-		                	FROM ${tableBio} `
-	            		}
-	            		conti = conti+1
-            		}
-
-            		query_temp = query_temp + ") select bid, datos, ST_AsText(ST_Union(bios.union_geom)) AS union_geom from bios WHERE ST_IsValid(bios.union_geom) GROUP BY bid, datos"
-
-            		debug("query_temp: " + query_temp)
-
-            	}
-
-	            poligonResult = await pool.oneOrNone(query_temp, {bid: data.idfuente, data: data});
-
-			}
-            if(variable_id == '2'){
-				query_temp = `SELECT $<bid:raw> as bid, ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) as union_geom, '$<data:raw>'::jsonb as datos
-	                FROM $<tableBio:raw>
-	                WHERE categoria = '$<layer:raw>'`
-	            poligonResult = await pool.oneOrNone(query_temp, {bid: bid, tableBio: tableBio, layer: layer, data: data});
-
-			}
-            if(variable_id == '3'){
-            	query_temp = `SELECT $<bid:raw> as bid, ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) as union_geom, '$<data:raw>'::jsonb as datos
-	                FROM $<tableBio:raw>
-	                WHERE categoria = '$<layer:raw>' AND icat = $<icat:raw>`
-	            poligonResult = await pool.oneOrNone(query_temp, {bid: bid, tableBio: tableBio, layer: layer, icat:icat, data: data});
-
-            }
-
-			if(!poligonResult || !poligonResult.union_geom){
-				queryBioParts.push({
-					bid: bid,
-					union_geom: null,
-					datos: data
-				})
-			}
-			else{
-				queryBioParts.push(poligonResult)
-			}
-
-        }
-
-        // debug(queryBioParts)
-
-        debug("grid_id: " + grid_id)
-
-        const query_catgrid_temp = `
-                select region_id, table_cell_name, table_view_name 
-				from cat_grid cg  
-				where grid_id = $<grid_id:raw>`
-
-        const table_cell_item = await pool_mallas.one(query_catgrid_temp, {grid_id: grid_id});
-
-        const tablename = table_cell_item.table_cell_name
-        let colunmname = tablename
-
-		const table_view_name = table_cell_item.table_view_name
-
-		const region_id = table_cell_item.region_id
-
-        colunmname = colunmname.replace(/grid_/g,"")
-        colunmname = colunmname.replace(/_aoi/g,"")
-        colunmname = "gridid_" + colunmname
-        
-		debug("region_id: " + region_id)
-		debug("tablename: " + tablename)
-        debug("colunmname: " + colunmname)
-		debug("table_view_name: " + table_view_name)
-
-        let response_array = []
-
-        // queryBioParts.forEach((poligonResult, index) => {
-        for(poligonResult of queryBioParts){
-
-        	// debug(poligonResult)
-        	
-        	query_temp = `with regionarea as (select g.$<colunmname:raw>, g.the_geom
-				from $<tablename:raw> as g
-				join $<table_view_name:raw> vg
-				on ST_Intersects(g.the_geom, vg.border)  
-				where vg.region_id = $<region_id:raw>
-			),
-			intersectCells as (
-				select distinct '$<bid:raw>' as bid, g.$<colunmname:raw> as cell
-				from  regionarea as g
-				join (
-					select 
-					ST_SetSRID(ST_GeomFromText('$<poligonResult:raw>'),4326) as geom
-					) as p
-				ON ST_Intersects(g.the_geom, p.geom)
-			)
-			select bid, array_agg(cell) as cells
-			from intersectCells
-			group by bid`
-			
-			debug("query_temp: " + query_temp)
-
-			if(!poligonResult.union_geom){
-				response_array.push({
-					id: variable_id,
-					grid_id: grid_id,
-					level_id: poligonResult.bid,
-					cells: [],
-					n: 0,
-					metadata: poligonResult.datos
-				})
-				continue
-			}
-
-			inersectResult = await pool_mallas.oneOrNone(query_temp, {table_view_name: table_view_name, region_id: region_id, poligonResult: poligonResult.union_geom, bid: poligonResult.bid, colunmname:colunmname, tablename:tablename});
-
-			if(!inersectResult || !inersectResult.cells){
-				response_array.push({
-					id: variable_id,
-					grid_id: grid_id,
-					level_id: poligonResult.bid,
-					cells: [],
-					n: 0,
-					metadata: poligonResult.datos
-				})
-				continue
-			}
-
-			response_array.push({
-				id: variable_id,
-				grid_id: grid_id,
-				level_id: inersectResult.bid,
-				cells: inersectResult.cells,
-				n: inersectResult.cells.length,
-				metadata: poligonResult.datos
-			})
-        	
-
-        }
-
-		res.status(200).json(
-			response_array
-		)
-
-
-    } catch (error) {
-        debug(error);
-        res.status(500).json({ error: "Error al procesar la solicitud.", message: error.message });
+exports.get_sourceinfo = async function get_sourceinfo(req, res) {
+  // Si quieres solo lectura real, deja únicamente GET
+  if (req.method !== 'GET') {
+    return res.status(405).json({
+      message: 'Método no permitido'
+    });
+  }
+
+  try {
+    const data = await pool.oneOrNone(`
+      SELECT name, description, source_url, download_url, dict_url
+      FROM data_source_info
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 1
+    `);
+
+    if (!data) {
+      return res.status(404).json({
+        message: 'No se encontró la fuente de datos.'
+      });
     }
 
+    return res.status(200).json({ data });
+  } catch (error) {
+    debug(error);
+    return res.status(500).json({
+      message: 'Error interno al obtener la fuente de datos.'
+    });
+  }
 };
+
+
+
+exports.variables = async function variables(req, res) {
+  try {
+    const data = await pool.any(`
+      with fuentes_wc as (
+        select id_fuentes_bio
+        from raster_bins rb
+        group by id_fuentes_bio
+      )
+      select 1 as id, 'Fuente' as variable, count(*) level_size,
+             ('{"idfuente":"string"}')::jsonb filter_fields,
+             array[1,2,3,4,5,6]::int[] as available_grids
+      from fuentes_wc
+
+      union all
+
+      (
+        with layers_wc as (
+          select layer
+          from raster_bins rb
+          group by layer
+        )
+        select 2 as id, 'Layer' as variable, count(*) level_size,
+               ('{"idfuente":"string","idlayer":"string"}')::jsonb filter_fields,
+               array[1,2,3,4,5,6]::int[] as available_grids
+        from layers_wc
+      )
+
+      union all
+
+      (
+        with ranges_wc as (
+          select id_fuentes_bio, layer, icat
+          from raster_bins rb
+          group by id_fuentes_bio, layer, icat
+        )
+        select 3 as id, 'Rango' as variable, count(*) level_size,
+               ('{"idfuente":"string","idlayer":"string","idrange":"string"}')::jsonb filter_fields,
+               array[1,2,3,4,5,6]::int[] as available_grids
+        from ranges_wc
+      )
+
+      order by id;
+    `);
+
+    return res.status(200).json({ data });
+  } catch (error) {
+    debug(error);
+    return res.status(500).json({
+      message: "Error interno al obtener catálogo",
+      error: error.message
+    });
+  }
+};
+
+
+
+exports.secuencia = async function secuencia(req, res) {
+  try {
+    const {
+      variableLevel,
+      variableValue,
+      nextVariableLevel
+    } = req.body || {};
+
+    if (!variableLevel || !variableValue || !nextVariableLevel) {
+      return res.status(400).json({
+        message: "Parámetros requeridos: variableLevel, variableValue, nextVariableLevel"
+      });
+    }
+
+    const current = String(variableLevel).trim().toLowerCase();
+    const next = String(nextVariableLevel).trim().toLowerCase();
+
+    // Transiciones soportadas por el endpoint
+    const validTransition =
+      (current === "fuente" && next === "layer") ||
+      (current === "layer" && next === "rango");
+
+    if (!validTransition) {
+      return res.status(400).json({
+        message: "Transición inválida. Usa Fuente->Layer o Layer->Rango."
+      });
+    }
+
+    let data = [];
+
+    if (current === "fuente") {
+      // variableValue = id de fuente
+      data = await pool.any(
+        `
+        select distinct
+          rb.layer as value,
+          rb.label
+        from fuentes_bioclimaticas fb
+        join raster_bins rb on fb.id = rb.id_fuentes_bio
+        where fb.id = $1
+        order by rb.layer;
+        `,
+        [variableValue]
+      );
+    } else {
+      // current === "layer", variableValue = nombre de capa (ej. bio018)
+      data = await pool.any(
+        `
+        select distinct
+          rb.bid as value,
+          'bid:' || rb.bid || ' | tag:' ||
+          (round(split_part(rb.tag, ':', 1)::numeric, 4)::text || ':' ||
+           round(split_part(rb.tag, ':', 2)::numeric, 4)::text) as label
+        from raster_bins rb
+        where rb.layer = $1
+        order by label;
+        `,
+        [variableValue]
+      );
+    }
+
+    return res.status(200).json({ data });
+  } catch (error) {
+    debug(error);
+    return res.status(500).json({
+      message: "Error interno al obtener catálogo",
+      error: error.message
+    });
+  }
+};
+
+
+
+exports.get_variable_byid = async function get_variable_byid(req, res) {
+  try {
+    const variable_id = String(req.params.id || "").trim();
+    const q = String(verb_utils.getParam(req, "q", "") || "").trim();
+
+    const offset = Number.parseInt(verb_utils.getParam(req, "offset", 0), 10);
+    const limit = Number.parseInt(verb_utils.getParam(req, "limit", 10), 10);
+
+    if (!dic_wc_select.has(variable_id)) {
+      return res.status(400).json({
+        message: "variable_id inválido. Valores permitidos: 1, 2, 3"
+      });
+    }
+
+    if (Number.isNaN(offset) || offset < 0 || Number.isNaN(limit) || limit <= 0) {
+      return res.status(400).json({
+        message: "offset/limit inválidos"
+      });
+    }
+
+    const whereClauses = [];
+    const values = [];
+    let p = 1;
+
+    if (q !== "") {
+      const filters = q.split(";").map(s => s.trim()).filter(Boolean);
+
+      for (const filter of filters) {
+        const pair = filter.split("=");
+        if (pair.length !== 2) {
+          return res.status(400).json({
+            message: `Filtro inválido: "${filter}". Formato esperado: campo=valor`
+          });
+        }
+
+        const rawKey = pair[0].trim();
+        const rawValue = pair[1].trim();
+
+        const canonicalKey = dic_labeltocolumns.get(rawKey);
+        if (!canonicalKey || valid_filters.indexOf(canonicalKey) === -1) {
+          return res.status(400).json({
+            message: `Filtro no válido: "${rawKey}"`
+          });
+        }
+
+        const dbColumn = dic_wc_db.get(canonicalKey);
+        const groupValues = rawValue.split(",").map(v => v.trim()).filter(Boolean);
+
+        if (groupValues.length === 0) {
+          return res.status(400).json({
+            message: `Filtro sin valores: "${rawKey}"`
+          });
+        }
+
+        if (canonicalKey === "idlayer" || canonicalKey === "descripcion") {
+          const likeParts = groupValues.map(v => {
+            values.push(`${v}%`);
+            return `${dbColumn} ILIKE $${p++}`;
+          });
+          whereClauses.push(`(${likeParts.join(" OR ")})`);
+        } else {
+          const eqParts = groupValues.map(v => {
+            values.push(v);
+            return `${dbColumn} = $${p++}`;
+          });
+          whereClauses.push(`(${eqParts.join(" OR ")})`);
+        }
+      }
+    }
+
+    const selectSql = dic_wc_select.get(variable_id);
+    const groupSql = dic_wc_group.get(variable_id);
+    const orderSql = dic_wc_order.get(variable_id);
+
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+    values.push(limit);
+    const limitPos = p++;
+    values.push(offset);
+    const offsetPos = p++;
+
+    const query = `
+      ${selectSql}
+      FROM fuentes_bioclimaticas fb
+      JOIN raster_bins rb ON fb.id = rb.id_fuentes_bio
+      ${whereSql}
+      ${groupSql}
+      ${orderSql}
+      LIMIT $${limitPos}
+      OFFSET $${offsetPos}
+    `;
+
+    const resp = await pool.any(query, values);
+
+    if (resp.length === 0) {
+      return res.status(404).json({
+        message: "No hubo coincidencias con los parámetros recibidos"
+      });
+    }
+
+    const response_array = resp.map(item => {
+      const temp = {
+        id: Number(variable_id),
+        level_id: item.level_id,
+        data: {
+          descripcion: item.descripcion,
+          bins: item.bins,
+          area: item.area,
+          idfuente: item.id_fuentes_bio
+        }
+      };
+
+      if (variable_id === "2" || variable_id === "3") {
+        temp.data.layer = item.layer;
+        temp.data.label = item.label;
+      }
+
+      if (variable_id === "3") {
+        temp.data.tag = item.tag;
+        temp.data.icat = item.icat;
+      }
+
+      return temp;
+    });
+
+    return res.status(200).json({ data: response_array });
+  } catch (error) {
+    debug(error);
+    return res.status(500).json({
+      message: "Error interno al obtener datos",
+      error: error.message
+    });
+  }
+};
+
+
+
+
+exports.get_data_byid = async function get_data_byid(req, res) {
+  debug("get_data_byid");
+
+  const toArray = (v) => {
+    if (Array.isArray(v)) return v;
+    if (v == null || v === "") return [];
+    if (typeof v === "string") return v.split(",").map(s => s.trim()).filter(Boolean);
+    return [v];
+  };
+
+  const isSafeIdentifier = (s) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(String(s || ""));
+
+  try {
+    const variable_id = String(req.params.id || "").trim();
+    if (!dic_wc_select.has(variable_id)) {
+      return res.status(400).json({ message: "variable_id inválido. Valores permitidos: 1,2,3" });
+    }
+
+    const grid_id = Number.parseInt(verb_utils.getParam(req, "grid_id", 1), 10);
+    if (Number.isNaN(grid_id)) {
+      return res.status(400).json({ message: "grid_id inválido" });
+    }
+
+    const levels_id_raw = toArray(verb_utils.getParam(req, "levels_id", []));
+    const levels_id = levels_id_raw
+      .map(v => Number.parseInt(v, 10))
+      .filter(v => Number.isInteger(v));
+
+    if (levels_id.length === 0) {
+      return res.status(400).json({ message: "No se proporcionaron levels_id válidos." });
+    }
+
+    const filter_names = toArray(verb_utils.getParam(req, "filter_names", []));
+    const filter_values = toArray(verb_utils.getParam(req, "filter_values", []));
+    if (filter_names.length !== filter_values.length) {
+      return res.status(400).json({ message: "filter_names y filter_values deben tener la misma longitud." });
+    }
+
+    const selectSql = dic_wc_select.get(variable_id);
+    const groupSql = dic_wc_group.get(variable_id);
+    const orderSql = dic_wc_order.get(variable_id);
+
+    const whereParts = ["rb.bid = ANY($1::int[])"];
+    const params = [levels_id];
+    let p = 2;
+
+    for (let i = 0; i < filter_names.length; i++) {
+      const fName = String(filter_names[i] || "").trim();
+      const fValue = String(filter_values[i] || "").trim();
+
+      const col = dic_wc_db.get(fName);
+      if (!col) continue;
+
+      if (fName === "idlayer" || fName === "descripcion") {
+        whereParts.push(`${col} ILIKE $${p}`);
+        params.push(`${fValue}%`);
+      } else {
+        whereParts.push(`${col} = $${p}`);
+        params.push(fValue);
+      }
+      p++;
+    }
+
+    const queryLevels = `
+      ${selectSql}
+      FROM fuentes_bioclimaticas fb
+      JOIN raster_bins rb ON fb.id = rb.id_fuentes_bio
+      WHERE ${whereParts.join(" AND ")}
+      ${groupSql}
+      ${orderSql}
+    `;
+
+    const levelsRows = await pool.any(queryLevels, params);
+    if (levelsRows.length === 0) {
+      return res.status(404).json({ message: "No se encontraron niveles." });
+    }
+
+    const queryBioParts = [];
+
+    for (const item of levelsRows) {
+      const meta = {
+        descripcion: item.descripcion,
+        bins: item.bins,
+        area: item.area,
+        idfuente: item.id_fuentes_bio
+      };
+
+      let polygonResult = null;
+
+      if (variable_id === "1") {
+        const fuenteId = Number(item.id_fuentes_bio);
+        const q = fuenteId === 1 ? "_q20" : fuenteId === 2 ? "_q10" : null;
+        if (!q) {
+          queryBioParts.push({ bid: item.id_fuentes_bio, union_geom: null, datos: meta });
+          continue;
+        }
+
+        const unions = [];
+        const unionParams = [];
+        let up = 1;
+
+        for (const fuente_bio of fuente_bios) {
+          const tableBio = `${fuente_bio}${q}`;
+          if (!isSafeIdentifier(tableBio)) continue;
+
+          unions.push(
+            `SELECT ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) AS union_geom FROM ${pgp.as.name(tableBio)}`
+          );
+        }
+
+        if (unions.length === 0) {
+          queryBioParts.push({ bid: item.id_fuentes_bio, union_geom: null, datos: meta });
+          continue;
+        }
+
+        const qUnion = `
+          WITH bios AS (${unions.join(" UNION ALL ")})
+          SELECT $1 AS bid, $2::jsonb AS datos, ST_AsText(ST_Union(ST_GeomFromText(union_geom))) AS union_geom
+          FROM bios
+          WHERE union_geom IS NOT NULL
+        `;
+        unionParams.push(item.id_fuentes_bio, JSON.stringify(meta));
+        polygonResult = await pool.oneOrNone(qUnion, unionParams);
+      }
+
+      if (variable_id === "2" || variable_id === "3") {
+        const layer = String(item.layer || "").trim();
+        const bins = Number(item.bins);
+        const tableBio = `${layer}_q${bins}`;
+
+        if (!isSafeIdentifier(tableBio)) {
+          queryBioParts.push({ bid: item.level_id, union_geom: null, datos: meta });
+          continue;
+        }
+
+        if (variable_id === "2") {
+          const qPoly = `
+            SELECT $1 AS bid,
+                   ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) AS union_geom,
+                   $2::jsonb AS datos
+            FROM ${pgp.as.name(tableBio)}
+            WHERE categoria = $3
+          `;
+          polygonResult = await pool.oneOrNone(qPoly, [item.level_id, JSON.stringify({ ...meta, layer, label: item.label }), layer]);
+        } else {
+          const icat = Number(item.icat);
+          const qPoly = `
+            SELECT $1 AS bid,
+                   ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) AS union_geom,
+                   $2::jsonb AS datos
+            FROM ${pgp.as.name(tableBio)}
+            WHERE categoria = $3 AND icat = $4
+          `;
+          polygonResult = await pool.oneOrNone(qPoly, [
+            item.level_id,
+            JSON.stringify({ ...meta, layer, tag: item.tag, icat }),
+            layer,
+            icat
+          ]);
+        }
+      }
+
+      if (!polygonResult || !polygonResult.union_geom) {
+        queryBioParts.push({
+          bid: item.level_id,
+          union_geom: null,
+          datos: meta
+        });
+      } else {
+        queryBioParts.push(polygonResult);
+      }
+    }
+
+    const catGrid = await pool_mallas.oneOrNone(
+      `SELECT region_id, table_cell_name, table_view_name FROM cat_grid WHERE grid_id = $1`,
+      [grid_id]
+    );
+
+    if (!catGrid) {
+      return res.status(404).json({ message: "No se encontró configuración para grid_id." });
+    }
+
+    const tablename = String(catGrid.table_cell_name || "").trim();
+    const tableViewName = String(catGrid.table_view_name || "").trim();
+    const region_id = catGrid.region_id;
+
+    if (!isSafeIdentifier(tablename) || !isSafeIdentifier(tableViewName)) {
+      return res.status(500).json({ message: "Configuración de malla inválida." });
+    }
+
+    let columnName = tablename.replace(/grid_/g, "").replace(/_aoi/g, "");
+    columnName = `gridid_${columnName}`;
+    if (!isSafeIdentifier(columnName)) {
+      return res.status(500).json({ message: "Columna de malla inválida." });
+    }
+
+    const response_array = [];
+
+    for (const polygon of queryBioParts) {
+      if (!polygon.union_geom) {
+        response_array.push({
+          id: variable_id,
+          grid_id,
+          level_id: polygon.bid,
+          cells: [],
+          n: 0,
+          metadata: polygon.datos
+        });
+        continue;
+      }
+
+      const qIntersect = `
+        WITH regionarea AS (
+          SELECT g.${pgp.as.name(columnName)} AS cell, g.the_geom
+          FROM ${pgp.as.name(tablename)} g
+          JOIN ${pgp.as.name(tableViewName)} vg ON ST_Intersects(g.the_geom, vg.border)
+          WHERE vg.region_id = $1
+        ),
+        intersectCells AS (
+          SELECT DISTINCT $2 AS bid, g.cell
+          FROM regionarea g
+          JOIN (SELECT ST_SetSRID(ST_GeomFromText($3), 4326) AS geom) p
+            ON ST_Intersects(g.the_geom, p.geom)
+        )
+        SELECT bid, array_agg(cell) AS cells
+        FROM intersectCells
+        GROUP BY bid
+      `;
+
+      const inter = await pool_mallas.oneOrNone(qIntersect, [region_id, polygon.bid, polygon.union_geom]);
+
+      response_array.push({
+        id: variable_id,
+        grid_id,
+        level_id: polygon.bid,
+        cells: inter?.cells || [],
+        n: inter?.cells?.length || 0,
+        metadata: polygon.datos
+      });
+    }
+
+    return res.status(200).json(response_array);
+  } catch (error) {
+    debug(error);
+    return res.status(500).json({
+      error: "Error al procesar la solicitud.",
+      message: error.message
+    });
+  }
+};
+
