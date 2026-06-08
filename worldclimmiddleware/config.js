@@ -12,6 +12,11 @@ const config = {
     port: process.env.DBPORT,
     application_name: 'expressMiddleware',
     poolSize: 10,
+    connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000),
+    idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS || 30000),
+    query_timeout: Number(process.env.DB_QUERY_TIMEOUT_MS || 60000),
+    statement_timeout: Number(process.env.DB_STATEMENT_TIMEOUT_MS || 60000),
+    keepAlive: true,
   },
   db_mallas: {
     database: process.env.DBNAME_MALLAS,
@@ -21,6 +26,11 @@ const config = {
     port: process.env.DBPORT_MALLAS,
     application_name: 'MallasV3_Middleware',
     poolSize: 10,
+    connectionTimeoutMillis: Number(process.env.DB_CONNECTION_TIMEOUT_MS || 5000),
+    idleTimeoutMillis: Number(process.env.DB_IDLE_TIMEOUT_MS || 30000),
+    query_timeout: Number(process.env.DB_QUERY_TIMEOUT_MS || 60000),
+    statement_timeout: Number(process.env.DB_STATEMENT_TIMEOUT_MS || 60000),
+    keepAlive: true,
   },
   port: process.env.PORT,
   email: {
@@ -57,4 +67,3 @@ const config = {
 }
 
 module.exports = config
-

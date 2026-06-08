@@ -124,7 +124,7 @@ def main(realfile, fn, srcfile, no_of_quantiles, tags):
 
     # Crea una serie de percentiles
     p = np.linspace(start=0, stop=100, num=no_of_quantiles+1)
-    percentiles = np.nanpercentile(np.where(np.logical_not(data.mask), data, np.NAN), p)
+    percentiles = np.nanpercentile(np.where(np.logical_not(data.mask), data, np.nan), p)
 
     # Abre el archivo raster fuente que se va a reclasificar
     src_ds = gdal.Open(srcfile)

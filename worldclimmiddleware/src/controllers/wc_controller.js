@@ -22,6 +22,9 @@ dic_wc_order.set('1','order by id_fuentes_bio')
 dic_wc_order.set('2','order by id_fuentes_bio, layer')
 dic_wc_order.set('3','order by bid')
 
+const MAX_LIMIT = 500
+const MAX_LEVELS = 500
+
 let valid_filters = ["idfuente","idlayer","idrange", "descripcion"]
 
 let dic_labeltocolumns = new Map();
@@ -84,14 +87,23 @@ exports.get_sourceinfo = async function get_sourceinfo(req, res) {
 exports.variables = async function variables(req, res) {
   try {
     const data = await pool.any(`
-      with fuentes_wc as (
+      with available_wc as (
+        select
+          coalesce(
+            array_agg(distinct grids.grid_id order by grids.grid_id) filter (where grids.grid_id is not null),
+            array[]::int[]
+          ) as available_grids
+        from fuentes_bioclimaticas fb
+        left join lateral unnest(coalesce(fb.available_grids, array[]::int[])) as grids(grid_id) on true
+      ),
+      fuentes_wc as (
         select id_fuentes_bio
         from raster_bins rb
         group by id_fuentes_bio
       )
       select 1 as id, 'Fuente' as variable, count(*) level_size,
              ('{"idfuente":"string"}')::jsonb filter_fields,
-             array[1,2,3,4,5,6]::int[] as available_grids
+             (select available_grids from available_wc) as available_grids
       from fuentes_wc
 
       union all
@@ -104,7 +116,7 @@ exports.variables = async function variables(req, res) {
         )
         select 2 as id, 'Layer' as variable, count(*) level_size,
                ('{"idfuente":"string","idlayer":"string"}')::jsonb filter_fields,
-               array[1,2,3,4,5,6]::int[] as available_grids
+               (select available_grids from available_wc) as available_grids
         from layers_wc
       )
 
@@ -118,7 +130,7 @@ exports.variables = async function variables(req, res) {
         )
         select 3 as id, 'Rango' as variable, count(*) level_size,
                ('{"idfuente":"string","idlayer":"string","idrange":"string"}')::jsonb filter_fields,
-               array[1,2,3,4,5,6]::int[] as available_grids
+               (select available_grids from available_wc) as available_grids
         from ranges_wc
       )
 
@@ -215,8 +227,8 @@ exports.get_variable_byid = async function get_variable_byid(req, res) {
     const variable_id = String(req.params.id || "").trim();
     const q = String(verb_utils.getParam(req, "q", "") || "").trim();
 
-    const offset = Number.parseInt(verb_utils.getParam(req, "offset", 0), 10);
-    const limit = Number.parseInt(verb_utils.getParam(req, "limit", 10), 10);
+    const offset = Number(verb_utils.getParam(req, "offset", 0));
+    const limit = Number(verb_utils.getParam(req, "limit", 10));
 
     if (!dic_wc_select.has(variable_id)) {
       return res.status(400).json({
@@ -224,9 +236,9 @@ exports.get_variable_byid = async function get_variable_byid(req, res) {
       });
     }
 
-    if (Number.isNaN(offset) || offset < 0 || Number.isNaN(limit) || limit <= 0) {
+    if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit <= 0 || limit > MAX_LIMIT) {
       return res.status(400).json({
-        message: "offset/limit inválidos"
+        message: `offset/limit inválidos. limit máximo permitido: ${MAX_LIMIT}`
       });
     }
 
@@ -366,24 +378,29 @@ exports.get_data_byid = async function get_data_byid(req, res) {
       return res.status(400).json({ message: "variable_id inválido. Valores permitidos: 1,2,3" });
     }
 
-    const grid_id = Number.parseInt(verb_utils.getParam(req, "grid_id", 1), 10);
-    if (Number.isNaN(grid_id)) {
+    const grid_id = Number(verb_utils.getParam(req, "grid_id", 1));
+    if (!Number.isInteger(grid_id) || grid_id <= 0) {
       return res.status(400).json({ message: "grid_id inválido" });
     }
 
     const levels_id_raw = toArray(verb_utils.getParam(req, "levels_id", []));
     const levels_id = levels_id_raw
-      .map(v => Number.parseInt(v, 10))
-      .filter(v => Number.isInteger(v));
+      .map(v => Number(v));
 
-    if (levels_id.length === 0) {
-      return res.status(400).json({ message: "No se proporcionaron levels_id válidos." });
+    if (levels_id.length === 0 || levels_id.some(v => !Number.isInteger(v) || v <= 0)) {
+      return res.status(400).json({ message: "levels_id debe contener solo enteros positivos." });
+    }
+    if (levels_id.length > MAX_LEVELS) {
+      return res.status(400).json({ message: `levels_id excede el máximo permitido (${MAX_LEVELS}).` });
     }
 
     const filter_names = toArray(verb_utils.getParam(req, "filter_names", []));
     const filter_values = toArray(verb_utils.getParam(req, "filter_values", []));
     if (filter_names.length !== filter_values.length) {
       return res.status(400).json({ message: "filter_names y filter_values deben tener la misma longitud." });
+    }
+    if (!filter_names.every(f => typeof f === "string")) {
+      return res.status(400).json({ message: "filter_names debe contener solo strings." });
     }
 
     const selectSql = dic_wc_select.get(variable_id);
@@ -399,7 +416,12 @@ exports.get_data_byid = async function get_data_byid(req, res) {
       const fValue = String(filter_values[i] || "").trim();
 
       const col = dic_wc_db.get(fName);
-      if (!col) continue;
+      if (!fName || valid_filters.indexOf(fName) === -1 || !col) {
+        return res.status(400).json({ message: `Filtro no válido: ${fName}` });
+      }
+      if (fValue === "") {
+        return res.status(400).json({ message: `Filtro sin valor: ${fName}` });
+      }
 
       if (fName === "idlayer" || fName === "descripcion") {
         whereParts.push(`${col} ILIKE $${p}`);
@@ -598,4 +620,3 @@ exports.get_data_byid = async function get_data_byid(req, res) {
     });
   }
 };
-

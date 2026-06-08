@@ -1,10 +1,10 @@
 INSERT INTO data_source_info (name, description, source_url, download_url, dict_url)
 VALUES (
-  'SNIB Data Source',
-  'Esta fuente de datos contiene la información de los datos del Sistema Nacional de Información sobre Biodiversidad de México',
-  'https://www.snib.mx/',
-  'https://www.snib.mx/ejemplares/descarga/',
-  'https://www.snib.mx/ejemplares/docs/CONABIO-SNIB-DiccionarioDatosEstandar202412.pdf'
+  'WorldClim 2.1 Historical Climate Data',
+  'Fuente de datos climáticos históricos WorldClim version 2.1 para 1970-2000; incluye variables mensuales y 19 variables bioclimáticas en formato GeoTIFF.',
+  'https://www.worldclim.org/data/worldclim21.html',
+  'https://www.worldclim.org/data/worldclim21.html',
+  'https://www.worldclim.org/data/bioclim.html'
 )
 ON CONFLICT (name) DO UPDATE SET
   description = EXCLUDED.description,

@@ -23,6 +23,26 @@ Dentro del script debemos definir el valor de la variable `default_nbins`, este 
 
 Dentro del script debemos definir el valor de la variable `aoi_value`, este parámetro es para delimitar o recortar el archivos raster que viene de forma global. Por default, se en cuentra delimitado por contientes, y asignado el valor para America. Si se desea delimitar por otro tipo de región, se debe modificar el archivo que se encuentra en /sql/get_aoi.sql.
 
+### Variables de entorno para dbbuild
+
+El script `dbbuild/build_worldclim.py` lee variables desde `dbbuild/.env`. Para configurar una ejecución nueva, usar `dbbuild/.env.example` como plantilla.
+
+```env
+DBNICHENAME=worldclim_data
+DBNICHEHOST=
+DBNICHEPORT=5432
+DBNICHEUSER=
+DBNICHEPASSWD=
+
+DBMESHNAME=meshandregions_db
+DBMESHHOST=
+DBMESHPORT=5432
+DBMESHUSER=
+DBMESHPASSWD=
+```
+
+Las variables `DBMESH*` se usan para crear un FDW temporal hacia `meshandregions_db` y calcular `available_grids` con base en la intersección espacial entre las capas `bioXXX_qN` y las mallas disponibles. Si estas variables no están definidas, el build continúa y omite el cálculo de `available_grids`.
+
 ### Datos resultantes de la ejecución de scripts del proyecto dbbuild
 
 Las tablas que son creadas por estos scripts se componen de la siguiente manera:
@@ -31,6 +51,14 @@ Las tablas que son creadas por estos scripts se componen de la siguiente manera:
 - Tablas que contienen el proceso de conversion de raster a vector, con la geometria y valor de cada área.
 - Tabla catálogo de las fuentes de datos generadas a los diferentes bins.
 - Tabla de detalle de cada capa por cada una de las 19 divisiones.
+- Metadatos de mallas disponibles en `fuentes_bioclimaticas.available_grids`.
+
+### Metadatos de la fuente
+
+El archivo `dbbuild/sql/seed_wc_data_source_worldclim.sql` registra la fuente oficial WorldClim 2.1 Historical Climate Data:
+
+- Fuente y descarga: `https://www.worldclim.org/data/worldclim21.html`
+- Diccionario de variables bioclimáticas: `https://www.worldclim.org/data/bioclim.html`
 
 
 ## Proyecto worldclimmiddleware
@@ -71,38 +99,96 @@ worldclim/
 - PostgreSQL / PostGIS
 - Arquitectura MVC
 
+### Configuración
+
+El middleware lee variables de entorno desde `worldclimmiddleware/.env`. Para configurar una instalación nueva, usar `worldclimmiddleware/.env.example` como plantilla.
+
+Variables principales:
+
+```env
+PORT=8080
+DBHOST=
+DBPORT=5432
+DBNAME=worldclim_data
+DBUSER=
+DBPWD=
+DBHOST_MALLAS=
+DBPORT_MALLAS=5432
+DBNAME_MALLAS=meshandregions_db
+DBUSER_MALLAS=
+DBPWD_MALLAS=
+DB_CONNECTION_TIMEOUT_MS=5000
+DB_IDLE_TIMEOUT_MS=30000
+DB_QUERY_TIMEOUT_MS=60000
+DB_STATEMENT_TIMEOUT_MS=60000
+```
+
+Las variables de timeout también están expuestas en `docker-compose.yml` para despliegues con Docker o Portainer.
+
 ## Rutas del API
+
+Todas las rutas del middleware se publican bajo el prefijo `/wc`.
 
 ### Ruta base
 
 ```
-GET /
+GET /wc/
 ```
 Respuesta de bienvenida al API WorldClim.
+
+### Salud de base de datos
+
+```
+GET /wc/db-health
+POST /wc/db-health
+```
+
+Valida la conexión PostgreSQL principal del middleware. Responde `status: "UP"` cuando la base está disponible y `status: "DOWN"` cuando no se puede conectar.
+
+### Información de la fuente
+
+```
+GET /wc/info
+POST /wc/info
+```
+
+Devuelve los metadatos de la fuente WorldClim registrados en `data_source_info`.
 
 ### Variables disponibles
 
 ```
-GET /variables
-POST /variables
+GET /wc/variables
+POST /wc/variables
 ```
 Devuelve el catálogo de variables climáticas disponibles.
 
 ### Variable por ID
 
 ```
-GET /variables/:id
-POST /variables/:id
+GET /wc/variables/:id
+POST /wc/variables/:id
 ```
 Obtiene metadatos de una variable específica.
+
+Parámetros opcionales:
+
+- `offset`: entero mayor o igual a `0`.
+- `limit`: entero entre `1` y `500`.
+- `q`: filtros separados por `;`, usando campos como `idfuente`, `idlayer`, `idrange` o `descripcion`.
 
 ### Datos climáticos por variable
 
 ```
-GET /get-data/:id
-POST /get-data/:id
+GET /wc/get-data/:id
+POST /wc/get-data/:id
 ```
 Entrega las celdas y valores asociados a la variable solicitada.
+
+Parámetros principales:
+
+- `grid_id`: entero positivo.
+- `levels_id`: arreglo o lista de enteros positivos; máximo `500` niveles por solicitud.
+- `filter_names` y `filter_values`: arreglos del mismo tamaño. Los filtros permitidos son `idfuente`, `idlayer`, `idrange` y `descripcion`.
 
 ---
 
@@ -141,4 +227,3 @@ Este proyecto se distribuye bajo la licencia definida en el archivo `LICENSE` de
 - Datos climáticos: **WorldClim**
 - Arquitectura y estándar: **SPECIES v3.0**
 - Implementación: CONABIO / Chilam Lab
-

@@ -38,15 +38,30 @@ bioclim_vars_info    = './sql/bioclim_vars_info.sql'
 update_label_var     = './sql/update_label_var.sql'
 create_wc_data_source = './sql/create_wc_data_source.sql'
 seed_wc_data_source_worldclim = './sql/seed_wc_data_source_worldclim.sql'
+create_mesh_fdw = './sql/02_create_mesh_fdw.sql'
+update_available_grids = './sql/03_update_available_grids.sql'
 
 logger = setup_logger()
 load_dotenv() 
+
+def env_first(*names):
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            return value
+    return None
 
 DBNICHENAME=os.getenv("DBNICHENAME")
 DBNICHEHOST=os.getenv("DBNICHEHOST")
 DBNICHEPORT=os.getenv("DBNICHEPORT")
 DBNICHEUSER=os.getenv("DBNICHEUSER")
 DBNICHEPASSWD=os.getenv("DBNICHEPASSWD")
+
+DBMESHNAME=env_first("DBMESHNAME", "DBNAME_MALLAS")
+DBMESHHOST=env_first("DBMESHHOST", "DBHOST_MALLAS")
+DBMESHPORT=env_first("DBMESHPORT", "DBPORT_MALLAS")
+DBMESHUSER=env_first("DBMESHUSER", "DBUSER_MALLAS")
+DBMESHPASSWD=env_first("DBMESHPASSWD", "DBPWD_MALLAS")
 
 os.chdir(output_folder)
 
@@ -226,7 +241,7 @@ try:
                 description = line[3]
 
     # poner la lista de gridids existentes
-    available_grids = "ARRAY[]"
+    available_grids = "ARRAY[]::integer[]"
     # available_grids = "ARRAY[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16]"
     filter_fields = '{"area": "string", "bins": "integer", "categoria": "string"}'
             
@@ -315,12 +330,17 @@ try:
         args = ['python3', './abiotic/reclassify_raster.py', '-t', '-n', str(nbins), '-srcfile', bio_var_name,
                         '-o', outfile, '-realfile', output_folder + final_name]
 
-        p = subprocess.Popen(args, stdout=subprocess.PIPE)
+        p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = p.communicate()
+        if p.returncode != 0:
+            logger.error('Error al reclasificar raster: {}'.format(stderr.decode('utf-8')))
+            raise RuntimeError('Falló reclassify_raster.py para {}'.format(bio_var_name))
 
+        if stdout:
+            logger.info('reclassify_raster.py: {}'.format(stdout.decode('utf-8')))
 
-        # espera hasta que el archivo sea creado
-        while not os.path.exists(tags):
-              time.sleep(2)
+        if not os.path.exists(tags):
+            raise RuntimeError('No se generó archivo de etiquetas: {}'.format(tags))
         
         tags_file = open(tags, 'r')
         tags_file = tags_file.read().splitlines()
@@ -414,7 +434,8 @@ try:
             '--outfile={0}'.format(final_namex100),  # Nombre del archivo de salida
             '--calc="A*100"',  # La expresión para multiplicar cada valor por 100
             '--NoDataValue=0',  # Valor NoData (ajusta según tu necesidad)
-            '--type=Float32'] # Tipo de datos para el raster de salida
+            '--type=Float32',  # Tipo de datos para el raster de salida
+            '--overwrite']  # Sobreescribir si el archivo ya existe
              
 
         p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -422,6 +443,7 @@ try:
 
         if p.returncode != 0:
               logger.error('Error al convertir valor raster x100: {}'.format(stderr.decode('utf-8')))
+              raise RuntimeError('Falló gdal_calc.py para {}'.format(final_namex100))
         else:
              logger.info('Multiplicación x100 completada. Archivo de salida: {}'.format(final_namex100))
 
@@ -436,6 +458,7 @@ try:
 
         if p.returncode != 0:
              logger.error('Error al vectorizar el raster: {}'.format(stderr.decode('utf-8')))
+             raise RuntimeError('Falló gdal_polygonize.py para {}'.format(final_shape))
         else:
              logger.info('Vectorización completada. Archivo de salida: {}'.format(final_shape))
         
@@ -455,6 +478,7 @@ try:
 
         if p.returncode != 0:
              logger.error('Error al dividir Shapefile: {}'.format(stderr.decode('utf-8')))
+             raise RuntimeError('Falló ogr2ogr al dividir Shapefile para {}'.format(final_shape_decimal))
         else:
              logger.info('División completada. Archivo de salida: {}'.format(final_shape_decimal))
 
@@ -474,6 +498,7 @@ try:
 
         if p.returncode != 0:
              logger.error('Error al guardar Shapefile en DB: {}'.format(stderr.decode('utf-8')))
+             raise RuntimeError('Falló ogr2ogr al guardar tabla {}'.format(final_table_name))
         else:
              logger.info('Guardado completado. Tabla de salida: {}'.format(final_table_name))
 
@@ -487,15 +512,16 @@ try:
                 logger.info("extension: {}".format(Path(file_inn).suffix))
 
                 if Path(file_inn).suffix == ".shp":
-                    shpfile_name = os.path.splitext(get_basename(file_inn))[0]
+                    shpfile_name = os.path.splitext(file_inn)[0]
                     logger.info('shpfile_name: {}'.format(shpfile_name))
-                
-                for othr_ext in ['.dbf','.prj','.shx']:   
-                    if os.path.exists(shpfile_name+othr_ext):
-                        os.remove(shpfile_name+othr_ext)
-                        logger.info("Archivo '{}' eliminado.".format(shpfile_name+othr_ext))
-                    else:
-                        logger.info("El archivo '{}' no existe.".format(shpfile_name+othr_ext))
+
+                    for othr_ext in ['.dbf','.prj','.shx']:
+                        sidecar_file = shpfile_name + othr_ext
+                        if os.path.exists(sidecar_file):
+                            os.remove(sidecar_file)
+                            logger.info("Archivo '{}' eliminado.".format(sidecar_file))
+                        else:
+                            logger.info("El archivo '{}' no existe.".format(sidecar_file))
              else:
                   logger.info("El archivo '{}' no existe.".format(file_inn))
 
@@ -537,4 +563,49 @@ try:
 
 except Exception as e:
     logger.error('No se pudo crear la tabla de variables abioticas: {0}'.format(str(e)))
+    sys.exit()
+
+
+# Se calculan las mallas disponibles para la fuente creada
+try:
+
+    logger.info('Calculando available_grids para la fuente WorldClim')
+
+    required_mesh_env = {
+        "DBMESHNAME": DBMESHNAME,
+        "DBMESHHOST": DBMESHHOST,
+        "DBMESHPORT": DBMESHPORT,
+        "DBMESHUSER": DBMESHUSER,
+        "DBMESHPASSWD": DBMESHPASSWD,
+    }
+    missing_mesh_env = [key for key, value in required_mesh_env.items() if not value]
+
+    if missing_mesh_env:
+        logger.warning('No se calcula available_grids. Faltan variables: {0}'.format(', '.join(missing_mesh_env)))
+    else:
+        create_mesh_fdw_sql = get_sql(create_mesh_fdw)
+        create_mesh_fdw_sql = create_mesh_fdw_sql.replace("__MESHDB_HOST__", DBMESHHOST)
+        create_mesh_fdw_sql = create_mesh_fdw_sql.replace("__MESHDB_PORT__", DBMESHPORT)
+        create_mesh_fdw_sql = create_mesh_fdw_sql.replace("__MESHDB_NAME__", DBMESHNAME)
+        create_mesh_fdw_sql = create_mesh_fdw_sql.replace("__MESHDB_USER__", DBMESHUSER)
+        create_mesh_fdw_sql = create_mesh_fdw_sql.replace("__MESHDB_PASS__", DBMESHPASSWD.replace("'", "''"))
+
+        update_available_grids_sql = get_sql(update_available_grids)
+        update_available_grids_sql = update_available_grids_sql.replace("__WC_SOURCE_ID__", str(id_catalogo))
+
+        conn = psycopg2.connect('dbname={0} host={1} port={2} user={3} password={4}'.format(DBNICHENAME, DBNICHEHOST, DBNICHEPORT, DBNICHEUSER, DBNICHEPASSWD))
+        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        cur = conn.cursor()
+
+        cur.execute(create_mesh_fdw_sql)
+        logger.info('create_mesh_fdw_sql')
+
+        cur.execute(update_available_grids_sql)
+        logger.info('update_available_grids_sql')
+
+        cur.close()
+        conn.close()
+
+except Exception as e:
+    logger.error('No se pudo calcular available_grids: {0}'.format(str(e)))
     sys.exit()

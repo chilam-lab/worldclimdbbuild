@@ -8,11 +8,15 @@ CREATE TABLE IF NOT EXISTS raster_bins (
   label character varying,
   id_fuentes_bio integer,
   coeficiente float8 NULL DEFAULT 1.0,
-  unidad varchar(20) NULL
-) WITH (OIDS=FALSE);
+  unidad varchar(20) NULL,
+  UNIQUE (tag, layer)
+);
 
--- SOLO EJECITAR CUANDO SEA LA PRIMERA VEZ
--- ALTER sequence raster_bins_bid_seq restart WITH 300000;
--- UPDATE raster_bins SET bid = nextval('raster_bins_bid_seq');
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM raster_bins LIMIT 1) THEN
+    ALTER SEQUENCE raster_bins_bid_seq RESTART WITH 300000;
+  END IF;
+END $$;
 
 

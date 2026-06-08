@@ -5,8 +5,10 @@
  * @const
  * @namespace netRouter
  */
+var debug = require('debug')('verbs:router')
 var router = require('express').Router()
 var rwcCtrl = require('../controllers/wc_controller')
+var verbUtils = require('../controllers/verb_utils')
 
 router.all('/', function(req, res) {
   res.json({ 
@@ -14,6 +16,26 @@ router.all('/', function(req, res) {
       message: '¡Yey! Bienvenido al API de Worldclim'
     }
   })
+})
+
+router.all('/db-health', async function(req, res) {
+  try {
+    var db = verbUtils.pool
+    await db.one('SELECT 1 AS status')
+
+    return res.status(200).json({
+      status: 'UP',
+      message: 'database connected',
+      timestamp: new Date().toISOString()
+    })
+  } catch (error) {
+    debug(error)
+    return res.status(503).json({
+      status: 'DOWN',
+      message: 'database unreachable',
+      error: error.message
+    })
+  }
 })
 
 
