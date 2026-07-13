@@ -22,7 +22,7 @@ dic_wc_order.set('1','order by id_fuentes_bio')
 dic_wc_order.set('2','order by id_fuentes_bio, layer')
 dic_wc_order.set('3','order by bid')
 
-const MAX_LIMIT = 500
+const MAX_LIMIT = 1000
 const MAX_LEVELS = 500
 
 let valid_filters = ["idfuente","idlayer","idrange", "descripcion"]
@@ -198,13 +198,14 @@ exports.secuencia = async function secuencia(req, res) {
       data = await pool.any(
         `
         select distinct
-          rb.bid as value,
-          'bid:' || rb.bid || ' | tag:' ||
-          (round(split_part(rb.tag, ':', 1)::numeric, 4)::text || ':' ||
-           round(split_part(rb.tag, ':', 2)::numeric, 4)::text) as label
+          rb.bid    as value,
+          rb.tag,
+          rb.icat,
+          rb.layer,
+          rb.label
         from raster_bins rb
         where rb.layer = $1
-        order by label;
+        order by rb.icat;
         `,
         [variableValue]
       );
@@ -317,9 +318,7 @@ exports.get_variable_byid = async function get_variable_byid(req, res) {
     const resp = await pool.any(query, values);
 
     if (resp.length === 0) {
-      return res.status(404).json({
-        message: "No hubo coincidencias con los parámetros recibidos"
-      });
+      return res.status(200).json({ data: [] });
     }
 
     const response_array = resp.map(item => {
@@ -516,6 +515,13 @@ exports.get_data_byid = async function get_data_byid(req, res) {
           polygonResult = await pool.oneOrNone(qPoly, [item.level_id, JSON.stringify({ ...meta, layer, label: item.label }), layer]);
         } else {
           const icat = Number(item.icat);
+          // Build a human-readable label for the range (rounded to 2 decimals)
+          const tagParts = String(item.tag || '').split(':');
+          const roundedTag = tagParts.length === 2
+            ? `${parseFloat(tagParts[0]).toFixed(2)} : ${parseFloat(tagParts[1]).toFixed(2)}`
+            : String(item.tag || '');
+          const rangoLabel = layer ? `${layer} [${roundedTag}]` : roundedTag;
+
           const qPoly = `
             SELECT $1 AS bid,
                    ST_AsText(ST_SetSRID(ST_Union(the_geom),4326)) AS union_geom,
@@ -525,7 +531,7 @@ exports.get_data_byid = async function get_data_byid(req, res) {
           `;
           polygonResult = await pool.oneOrNone(qPoly, [
             item.level_id,
-            JSON.stringify({ ...meta, layer, tag: item.tag, icat }),
+            JSON.stringify({ ...meta, layer, tag: item.tag, icat, label: rangoLabel }),
             layer,
             icat
           ]);
@@ -533,10 +539,15 @@ exports.get_data_byid = async function get_data_byid(req, res) {
       }
 
       if (!polygonResult || !polygonResult.union_geom) {
+        // For Rango items the enriched datos is inside polygonResult.datos (if query ran)
+        // Fall back gracefully preserving whatever metadata we have
+        const fallbackDatos = (polygonResult && polygonResult.datos)
+          ? (typeof polygonResult.datos === 'string' ? JSON.parse(polygonResult.datos) : polygonResult.datos)
+          : meta;
         queryBioParts.push({
           bid: item.level_id,
           union_geom: null,
-          datos: meta
+          datos: fallbackDatos
         });
       } else {
         queryBioParts.push(polygonResult);
