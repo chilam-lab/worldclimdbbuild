@@ -10,7 +10,7 @@ var pool_mallas = verb_utils.pool_mallas
 let dic_wc_select = new Map();
 dic_wc_select.set('1','select array_agg(bid) as level_id, id_fuentes_bio, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area ')
 dic_wc_select.set('2','select array_agg(bid) as level_id, array_agg(layer) as layers, id_fuentes_bio, layer, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area, rb."label"')
-dic_wc_select.set('3','select bid as level_id, tag, id_fuentes_bio, layer, icat, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area')
+dic_wc_select.set('3','select bid as level_id, tag, id_fuentes_bio, layer, icat, (fb.fuente || \' - \' || fb.descripcion) as  descripcion, fb.bins, fb.area, rb."label"')
 
 let dic_wc_group = new Map();
 dic_wc_group.set('1','group by id_fuentes_bio, fb.fuente, fb.descripcion, fb.bins, fb.area ')
@@ -277,7 +277,17 @@ exports.get_variable_byid = async function get_variable_byid(req, res) {
           });
         }
 
-        if (canonicalKey === "idlayer" || canonicalKey === "descripcion") {
+        if (canonicalKey === "idlayer") {
+          // Buscar tanto por identificador (bio001) como por nombre humano (Annual Mean Temperature)
+          const likeParts = groupValues.map(v => {
+            values.push(`${v}%`);
+            const idPos = p++;
+            values.push(`${v}%`);
+            const labelPos = p++;
+            return `(${dbColumn} ILIKE $${idPos} OR rb."label" ILIKE $${labelPos})`;
+          });
+          whereClauses.push(`(${likeParts.join(" OR ")})`);
+        } else if (canonicalKey === "descripcion") {
           const likeParts = groupValues.map(v => {
             values.push(`${v}%`);
             return `${dbColumn} ILIKE $${p++}`;
@@ -520,7 +530,8 @@ exports.get_data_byid = async function get_data_byid(req, res) {
           const roundedTag = tagParts.length === 2
             ? `${parseFloat(tagParts[0]).toFixed(2)} : ${parseFloat(tagParts[1]).toFixed(2)}`
             : String(item.tag || '');
-          const rangoLabel = layer ? `${layer} [${roundedTag}]` : roundedTag;
+          const layerName = String(item.label || '').trim() || layer;
+          const rangoLabel = layerName ? `${layerName} [${roundedTag}]` : roundedTag;
 
           const qPoly = `
             SELECT $1 AS bid,
