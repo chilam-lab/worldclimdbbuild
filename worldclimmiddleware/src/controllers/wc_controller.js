@@ -456,6 +456,17 @@ exports.get_data_byid = async function get_data_byid(req, res) {
       return res.status(404).json({ message: "No se encontraron niveles." });
     }
 
+    // Celdas precalculadas por rango y malla (dbbuild/precompute_wc_cells.py).
+    // Lo que no esté en wc_cells se sigue calculando en vivo abajo.
+    const cachedCells = new Map();
+    if (variable_id === "3") {
+      const cachedRows = await pool.any(
+        "SELECT bid, cells FROM wc_cells WHERE grid_id = $1 AND bid = ANY($2::int[])",
+        [grid_id, levelsRows.map(r => Number(r.level_id))]
+      ).catch((err) => { debug('wc_cells lookup:', err.message); return []; });
+      for (const r of cachedRows) cachedCells.set(Number(r.bid), r.cells || []);
+    }
+
     const queryBioParts = [];
 
     for (const item of levelsRows) {
@@ -532,6 +543,12 @@ exports.get_data_byid = async function get_data_byid(req, res) {
             : String(item.tag || '');
           const layerName = String(item.label || '').trim() || layer;
           const rangoLabel = layerName ? `${layerName} [${roundedTag}]` : roundedTag;
+          const datos = { ...meta, layer, tag: item.tag, icat, label: rangoLabel };
+
+          if (cachedCells.has(Number(item.level_id))) {
+            queryBioParts.push({ bid: item.level_id, union_geom: null, datos, cells: cachedCells.get(Number(item.level_id)) });
+            continue;
+          }
 
           const qPoly = `
             SELECT $1 AS bid,
@@ -542,7 +559,7 @@ exports.get_data_byid = async function get_data_byid(req, res) {
           `;
           polygonResult = await pool.oneOrNone(qPoly, [
             item.level_id,
-            JSON.stringify({ ...meta, layer, tag: item.tag, icat, label: rangoLabel }),
+            JSON.stringify(datos),
             layer,
             icat
           ]);
@@ -591,6 +608,18 @@ exports.get_data_byid = async function get_data_byid(req, res) {
     const response_array = [];
 
     for (const polygon of queryBioParts) {
+      if (polygon.cells) {
+        response_array.push({
+          id: variable_id,
+          grid_id,
+          level_id: polygon.bid,
+          cells: polygon.cells,
+          n: polygon.cells.length,
+          metadata: polygon.datos
+        });
+        continue;
+      }
+
       if (!polygon.union_geom) {
         response_array.push({
           id: variable_id,
