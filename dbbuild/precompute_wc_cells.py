@@ -150,6 +150,13 @@ def main():
 
     bins = load_bins(wc, only_bids)
 
+    # Rangos que ya no existen en raster_bins (fuente regenerada con otros
+    # bins): sus celdas ya no corresponden a nada.
+    with wc.cursor() as cur:
+        cur.execute("DELETE FROM wc_cells WHERE bid NOT IN (SELECT bid FROM raster_bins)")
+        if cur.rowcount:
+            log.info(f"Eliminadas {cur.rowcount} filas de wc_cells de rangos que ya no existen")
+
     for phase_name, resolutions in phases:
         grids = load_grids(mesh, resolutions, only_grids)
         all_grid_ids = [gid for g in grids.values() for gid, _ in g['grids']]

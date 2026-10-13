@@ -210,10 +210,11 @@ except Exception as e:
 # se definen variables para la divsión de bins para esta y la siguiente sección
 parser = argparse.ArgumentParser()
 parser.add_argument('-nbins', '--number-bins', default=default_nbins, help='Numero de bins en los que se discretizaran los rasters')
-args = parser.parse_args()
+parser.add_argument('--skip-cells', action='store_true', help='No recalcular wc_cells (preconteos de celdas por rango) al final')
+cli_args = parser.parse_args()
 
 # Obteniendo el numero de bins
-nbins = args.number_bins
+nbins = cli_args.number_bins
 logger.info('nbins: {0}'.format(nbins))
 
 try:
@@ -609,3 +610,21 @@ try:
 except Exception as e:
     logger.error('No se pudo calcular available_grids: {0}'.format(str(e)))
     sys.exit()
+
+
+# Preconteos: celdas de cada rango (raster_bins.bid) por malla, en wc_cells.
+# El middleware (get-data) las lee en vez de cruzar los poligonos en vivo.
+# --force porque el build regenera los poligonos de cada capa y los bid se
+# reutilizan por (tag, layer): lo ya guardado puede no corresponder.
+if cli_args.skip_cells:
+    logger.info('Se omite el precalculo de wc_cells (--skip-cells)')
+else:
+    try:
+        logger.info('Precalculando celdas por rango y malla (wc_cells)')
+        precompute_script = str(Path(__file__).resolve().parent / 'precompute_wc_cells.py')
+        subprocess.run([sys.executable, precompute_script, '--force'], check=True)
+        logger.info('wc_cells actualizado')
+    except Exception as e:
+        logger.error('No se pudo precalcular wc_cells: {0}'.format(str(e)))
+        sys.exit(1)
+
